@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: snapdeploy-postgres
+    environment:
+      POSTGRES_DB: snapdeploy
+      POSTGRES_USER: snapdeploy
+      POSTGRES_PASSWORD: snapdeploy123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snapdeploy -d snapdeploy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: snapdeploy-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - DB_DRIVER=postgres
+      - DB_DSN=postgres://snapdeploy:snapdeploy123@postgres:5432/snapdeploy?sslmode=disable
+      - AWS_REGION=us-east-1
+      - AWS_COGNITO_USER_POOL=dummy-pool
+      - AWS_COGNITO_CLIENT_ID=dummy-client
+      - JWT_ISSUER=https://cognito-idp.us-east-1.amazonaws.com/dummy-pool
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+
+volumes:
+  postgres_data:
