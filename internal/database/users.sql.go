@@ -23,16 +23,16 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const CreateUser = `-- name: CreateUser :one
-INSERT INTO users (id, email, username, cognito_user_id)
+INSERT INTO users (id, email, username, clerk_user_id)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, username, cognito_user_id, created_at, updated_at
+RETURNING id, email, username, clerk_user_id, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	Username      string    `json:"username"`
-	CognitoUserID string    `json:"cognito_user_id"`
+	ID          uuid.UUID `json:"id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	ClerkUserID string    `json:"clerk_user_id"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error) {
@@ -40,14 +40,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 		arg.ID,
 		arg.Email,
 		arg.Username,
-		arg.CognitoUserID,
+		arg.ClerkUserID,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Username,
-		&i.CognitoUserID,
+		&i.ClerkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -64,19 +64,19 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const GetUserByCognitoID = `-- name: GetUserByCognitoID :one
-SELECT id, email, username, cognito_user_id, created_at, updated_at FROM users
-WHERE cognito_user_id = $1 LIMIT 1
+const GetUserByClerkID = `-- name: GetUserByClerkID :one
+SELECT id, email, username, clerk_user_id, created_at, updated_at FROM users
+WHERE clerk_user_id = $1 LIMIT 1
 `
 
-func (q *Queries) GetUserByCognitoID(ctx context.Context, cognitoUserID string) (*User, error) {
-	row := q.db.QueryRowContext(ctx, GetUserByCognitoID, cognitoUserID)
+func (q *Queries) GetUserByClerkID(ctx context.Context, clerkUserID string) (*User, error) {
+	row := q.db.QueryRowContext(ctx, GetUserByClerkID, clerkUserID)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Username,
-		&i.CognitoUserID,
+		&i.ClerkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -84,7 +84,7 @@ func (q *Queries) GetUserByCognitoID(ctx context.Context, cognitoUserID string) 
 }
 
 const GetUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, username, cognito_user_id, created_at, updated_at FROM users
+SELECT id, email, username, clerk_user_id, created_at, updated_at FROM users
 WHERE email = $1 LIMIT 1
 `
 
@@ -95,7 +95,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 		&i.ID,
 		&i.Email,
 		&i.Username,
-		&i.CognitoUserID,
+		&i.ClerkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -103,7 +103,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 }
 
 const GetUserByID = `-- name: GetUserByID :one
-SELECT id, email, username, cognito_user_id, created_at, updated_at FROM users
+SELECT id, email, username, clerk_user_id, created_at, updated_at FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -114,7 +114,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) 
 		&i.ID,
 		&i.Email,
 		&i.Username,
-		&i.CognitoUserID,
+		&i.ClerkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -122,7 +122,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) 
 }
 
 const ListUsers = `-- name: ListUsers :many
-SELECT id, email, username, cognito_user_id, created_at, updated_at FROM users
+SELECT id, email, username, clerk_user_id, created_at, updated_at FROM users
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -145,7 +145,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User,
 			&i.ID,
 			&i.Email,
 			&i.Username,
-			&i.CognitoUserID,
+			&i.ClerkUserID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -166,7 +166,7 @@ const UpdateUser = `-- name: UpdateUser :one
 UPDATE users
 SET email = $1, username = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $3
-RETURNING id, email, username, cognito_user_id, created_at, updated_at
+RETURNING id, email, username, clerk_user_id, created_at, updated_at
 `
 
 type UpdateUserParams struct {
@@ -182,7 +182,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User,
 		&i.ID,
 		&i.Email,
 		&i.Username,
-		&i.CognitoUserID,
+		&i.ClerkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

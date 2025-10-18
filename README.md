@@ -1,12 +1,12 @@
 # SnapDeploy Core
 
-A modern user management system with AWS Cognito authentication, built with Go, Gin, SQLite, and clean architecture principles.
+A modern user management system with Clerk authentication, built with Go, Gin, PostgreSQL, and clean architecture principles.
 
 ## Features
 
 - **Health Check**: Basic health monitoring endpoint
-- **User Management**: Complete user CRUD operations with AWS Cognito integration
-- **Authentication**: JWT-based authentication using AWS Cognito
+- **User Management**: Complete user CRUD operations with Clerk integration
+- **Authentication**: JWT-based authentication using Clerk
 - **Database**: PostgreSQL with SQLC for type-safe database queries
 - **Migrations**: Database schema management with Goose
 - **API Documentation**: Auto-generated Swagger/OpenAPI documentation
@@ -19,7 +19,7 @@ A modern user management system with AWS Cognito authentication, built with Go, 
 - **Database**: PostgreSQL
 - **ORM**: SQLC (code generation)
 - **Migrations**: Goose
-- **Authentication**: AWS Cognito
+- **Authentication**: Clerk
 - **Documentation**: Swagger/OpenAPI
 - **Architecture**: Clean Architecture (Handlers → Services → Repositories)
 
@@ -49,7 +49,7 @@ snapdeploy-core/
 
 - Go 1.24 or later
 - Docker and Docker Compose
-- AWS Cognito User Pool (for authentication)
+- Clerk account (for authentication)
 
 ### Installation
 
@@ -82,7 +82,7 @@ make docker-up
 
 ```bash
 cp env.example .env
-# Edit .env with your AWS Cognito configuration
+# Edit .env with your Clerk configuration
 ```
 
 6. Run database migrations:
@@ -122,13 +122,11 @@ SERVER_HOST=0.0.0.0
 DB_DRIVER=postgres
 DB_DSN=postgres://snapdeploy:snapdeploy123@localhost:5433/snapdeploy?sslmode=disable
 
-# AWS Configuration
-AWS_REGION=us-east-1
-AWS_COGNITO_USER_POOL=your-user-pool-id
-AWS_COGNITO_CLIENT_ID=your-client-id
-
-# JWT Configuration
-JWT_ISSUER=https://cognito-idp.us-east-1.amazonaws.com/your-user-pool-id
+# Clerk Configuration
+CLERK_PUBLISHABLE_KEY=pk_test_your-publishable-key
+CLERK_SECRET_KEY=sk_test_your-secret-key
+CLERK_JWKS_URL=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
+CLERK_ISSUER=https://your-clerk-instance.clerk.accounts.dev
 ```
 
 ## API Endpoints
@@ -197,7 +195,7 @@ Run `make generate` to regenerate all code.
 
 ## Authentication
 
-The API uses AWS Cognito for authentication. Include the JWT token in the Authorization header:
+The API uses Clerk for authentication. Include the JWT token in the Authorization header:
 
 ```
 Authorization: Bearer <your-jwt-token>

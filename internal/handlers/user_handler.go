@@ -28,7 +28,7 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Security CognitoAuth
+// @Security ClerkAuth
 // @Success 200 {object} models.UserResponse
 // @Failure 401 {object} ErrorResponse
 // @Router /auth/me [get]
@@ -43,7 +43,7 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	user, ok := cognitoUser.(*middleware.CognitoUser)
+	user, ok := cognitoUser.(*middleware.ClerkUser)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
@@ -53,7 +53,7 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	// Get or create user in our database
-	dbUser, err := h.userService.GetOrCreateUserByCognitoID(c.Request.Context(), user)
+	dbUser, err := h.userService.GetOrCreateUserByClerkID(c.Request.Context(), user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
@@ -72,7 +72,7 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 // @Tags Users
 // @Accept json
 // @Produce json
-// @Security CognitoAuth
+// @Security ClerkAuth
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Number of items per page" default(20)
 // @Success 200 {object} UserListResponse
@@ -132,7 +132,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Tags Users
 // @Accept json
 // @Produce json
-// @Security CognitoAuth
+// @Security ClerkAuth
 // @Param id path string true "User ID"
 // @Success 200 {object} models.UserResponse
 // @Failure 404 {object} ErrorResponse
@@ -167,7 +167,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 // @Tags Users
 // @Accept json
 // @Produce json
-// @Security CognitoAuth
+// @Security ClerkAuth
 // @Param id path string true "User ID"
 // @Param request body models.UpdateUserRequest true "Update user request"
 // @Success 200 {object} models.UserResponse
@@ -221,7 +221,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Tags Users
 // @Accept json
 // @Produce json
-// @Security CognitoAuth
+// @Security ClerkAuth
 // @Param id path string true "User ID"
 // @Success 204 "User deleted successfully"
 // @Failure 404 {object} ErrorResponse

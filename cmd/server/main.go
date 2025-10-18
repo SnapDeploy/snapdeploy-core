@@ -22,7 +22,7 @@ import (
 
 // @title SnapDeploy Core API
 // @version 1.0
-// @description A modern user management system with AWS Cognito authentication
+// @description A modern user management system with Clerk authentication
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name SnapDeploy Team
@@ -34,10 +34,10 @@ import (
 // @host localhost:8080
 // @BasePath /api/v1
 
-// @securityDefinitions.apikey CognitoAuth
+// @securityDefinitions.apikey ClerkAuth
 // @in header
 // @name Authorization
-// @description AWS Cognito JWT token
+// @description Clerk JWT token
 
 func main() {
 	// Load configuration

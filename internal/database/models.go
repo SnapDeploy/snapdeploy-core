@@ -11,10 +11,10 @@ import (
 )
 
 type User struct {
-	ID            uuid.UUID    `json:"id"`
-	Email         string       `json:"email"`
-	Username      string       `json:"username"`
-	CognitoUserID string       `json:"cognito_user_id"`
-	CreatedAt     sql.NullTime `json:"created_at"`
-	UpdatedAt     sql.NullTime `json:"updated_at"`
+	ID          uuid.UUID    `json:"id"`
+	Email       string       `json:"email"`
+	Username    string       `json:"username"`
+	ClerkUserID string       `json:"clerk_user_id"`
+	CreatedAt   sql.NullTime `json:"created_at"`
+	UpdatedAt   sql.NullTime `json:"updated_at"`
 }

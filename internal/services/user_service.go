@@ -30,18 +30,18 @@ func (s *UserService) CreateUser(ctx context.Context, req *models.CreateUserRequ
 		return nil, fmt.Errorf("user with email %s already exists", req.Email)
 	}
 
-	// Check if user already exists by Cognito ID
-	existingUser, err = s.userRepo.GetByCognitoID(ctx, req.CognitoUserID)
+	// Check if user already exists by Clerk ID
+	existingUser, err = s.userRepo.GetByClerkID(ctx, req.ClerkUserID)
 	if err == nil && existingUser != nil {
-		return nil, fmt.Errorf("user with Cognito ID %s already exists", req.CognitoUserID)
+		return nil, fmt.Errorf("user with Clerk ID %s already exists", req.ClerkUserID)
 	}
 
 	// Create new user
 	user := &models.User{
-		ID:            generateID(), // You'll need to implement this
-		Email:         req.Email,
-		Username:      req.Username,
-		CognitoUserID: req.CognitoUserID,
+		ID:          generateID(), // You'll need to implement this
+		Email:       req.Email,
+		Username:    req.Username,
+		ClerkUserID: req.ClerkUserID,
 	}
 
 	return s.userRepo.Create(ctx, user)
@@ -57,9 +57,9 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models
 	return s.userRepo.GetByEmail(ctx, email)
 }
 
-// GetUserByCognitoID retrieves a user by Cognito user ID
-func (s *UserService) GetUserByCognitoID(ctx context.Context, cognitoUserID string) (*models.User, error) {
-	return s.userRepo.GetByCognitoID(ctx, cognitoUserID)
+// GetUserByClerkID retrieves a user by Clerk user ID
+func (s *UserService) GetUserByClerkID(ctx context.Context, clerkUserID string) (*models.User, error) {
+	return s.userRepo.GetByClerkID(ctx, clerkUserID)
 }
 
 // UpdateUser updates a user
@@ -115,19 +115,19 @@ func (s *UserService) ListUsers(ctx context.Context, page, limit int32) ([]*mode
 	return users, total, nil
 }
 
-// GetOrCreateUserByCognitoID gets an existing user or creates a new one based on Cognito user ID
-func (s *UserService) GetOrCreateUserByCognitoID(ctx context.Context, cognitoUser *middleware.CognitoUser) (*models.User, error) {
+// GetOrCreateUserByClerkID gets an existing user or creates a new one based on Clerk user ID
+func (s *UserService) GetOrCreateUserByClerkID(ctx context.Context, clerkUser *middleware.ClerkUser) (*models.User, error) {
 	// Try to get existing user
-	user, err := s.userRepo.GetByCognitoID(ctx, cognitoUser.GetUserID())
+	user, err := s.userRepo.GetByClerkID(ctx, clerkUser.GetUserID())
 	if err == nil {
 		return user, nil
 	}
 
 	// User doesn't exist, create new one
 	createReq := &models.CreateUserRequest{
-		Email:         cognitoUser.GetEmail(),
-		Username:      cognitoUser.GetUsername(),
-		CognitoUserID: cognitoUser.GetUserID(),
+		Email:       clerkUser.GetEmail(),
+		Username:    clerkUser.GetUsername(),
+		ClerkUserID: clerkUser.GetUserID(),
 	}
 
 	return s.CreateUser(ctx, createReq)

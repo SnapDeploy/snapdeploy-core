@@ -27,7 +27,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Returns information about the currently authenticated user",
@@ -84,7 +84,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Retrieve a paginated list of users",
@@ -134,7 +134,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Retrieve a specific user by its ID",
@@ -181,7 +181,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Update an existing user",
@@ -243,7 +243,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Delete a user by its ID",
@@ -381,8 +381,8 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "CognitoAuth": {
-            "description": "AWS Cognito JWT token",
+        "ClerkAuth": {
+            "description": "Clerk JWT token",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -397,7 +397,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "SnapDeploy Core API",
-	Description:      "A modern deployment management system with AWS Cognito authentication",
+	Description:      "A modern user management system with Clerk authentication",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

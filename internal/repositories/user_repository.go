@@ -31,10 +31,10 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 	}
 	
 	dbUser, err := queries.CreateUser(ctx, &database.CreateUserParams{
-		ID:            userID,
-		Email:         user.Email,
-		Username:      user.Username,
-		CognitoUserID: user.CognitoUserID,
+		ID:          userID,
+		Email:       user.Email,
+		Username:    user.Username,
+		ClerkUserID: user.ClerkUserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -78,11 +78,11 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 	return r.dbUserToModel(*dbUser), nil
 }
 
-// GetByCognitoID retrieves a user by Cognito user ID
-func (r *UserRepository) GetByCognitoID(ctx context.Context, cognitoUserID string) (*models.User, error) {
+// GetByClerkID retrieves a user by Clerk user ID
+func (r *UserRepository) GetByClerkID(ctx context.Context, clerkUserID string) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
 	
-	dbUser, err := queries.GetUserByCognitoID(ctx, cognitoUserID)
+	dbUser, err := queries.GetUserByClerkID(ctx, clerkUserID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("user not found")
@@ -174,11 +174,11 @@ func (r *UserRepository) dbUserToModel(dbUser database.User) *models.User {
 	}
 
 	return &models.User{
-		ID:            dbUser.ID.String(),
-		Email:         dbUser.Email,
-		Username:      dbUser.Username,
-		CognitoUserID: dbUser.CognitoUserID,
-		CreatedAt:     createdAt,
-		UpdatedAt:     updatedAt,
+		ID:          dbUser.ID.String(),
+		Email:       dbUser.Email,
+		Username:    dbUser.Username,
+		ClerkUserID: dbUser.ClerkUserID,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
 	}
 }

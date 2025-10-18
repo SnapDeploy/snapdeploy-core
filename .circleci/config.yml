@@ -1,0 +1,82 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@4.0.0
+
+workflows:
+  build-and-deploy:
+    jobs:
+      - build-and-push-core:
+          context: AWS
+          filters:
+            branches:
+              only: main
+      - deploy-core:
+          context: AWS
+          requires:
+            - build-and-push-core
+          filters:
+            branches:
+              only: main
+
+jobs:
+  build-and-push-core:
+    docker:
+      - image: cimg/go:1.24
+    environment:
+      AWS_DEFAULT_REGION: eu-west-1
+    steps:
+      - checkout
+      - setup_remote_docker
+      - aws-cli/setup
+      - run:
+          name: Install build tools
+          command: |
+            go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+            go install github.com/pressly/goose/v3/cmd/goose@latest
+            go install github.com/swaggo/swag/cmd/swag@latest
+      - run:
+          name: Download dependencies
+          command: |
+            go mod download
+            go mod tidy
+      - run:
+          name: Generate code
+          command: |
+            make generate
+      - run:
+          name: Run tests
+          command: |
+            go test ./...
+      - run:
+          name: Build application
+          command: |
+            make build
+      - run:
+          name: Login to ECR
+          command: |
+            aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - run:
+          name: Build and Push Docker Image
+          command: |
+            docker build -t snapdeploy-core .
+            docker tag snapdeploy-core:latest $ECR_REGISTRY/snapdeploy-dev-core:${CIRCLE_SHA1:0:7}
+            docker tag snapdeploy-core:latest $ECR_REGISTRY/snapdeploy-dev-core:latest
+            docker push $ECR_REGISTRY/snapdeploy-dev-core:${CIRCLE_SHA1:0:7}
+            docker push $ECR_REGISTRY/snapdeploy-dev-core:latest
+
+  deploy-core:
+    docker:
+      - image: cimg/python:3.9
+    environment:
+      AWS_DEFAULT_REGION: eu-west-1
+    steps:
+      - checkout
+      - aws-cli/setup
+      - run:
+          name: Update ECS Service
+          command: |
+            aws ecs update-service \
+              --cluster snapdeploy-dev-cluster \
+              --service snapdeploy-dev-core \
+              --force-new-deployment

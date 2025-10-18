@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "A modern deployment management system with AWS Cognito authentication",
+        "description": "A modern user management system with Clerk authentication",
         "title": "SnapDeploy Core API",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
@@ -21,7 +21,7 @@
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Returns information about the currently authenticated user",
@@ -78,7 +78,7 @@
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Retrieve a paginated list of users",
@@ -128,7 +128,7 @@
             "get": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Retrieve a specific user by its ID",
@@ -175,7 +175,7 @@
             "put": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Update an existing user",
@@ -237,7 +237,7 @@
             "delete": {
                 "security": [
                     {
-                        "CognitoAuth": []
+                        "ClerkAuth": []
                     }
                 ],
                 "description": "Delete a user by its ID",
@@ -375,8 +375,8 @@
         }
     },
     "securityDefinitions": {
-        "CognitoAuth": {
-            "description": "AWS Cognito JWT token",
+        "ClerkAuth": {
+            "description": "Clerk JWT token",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

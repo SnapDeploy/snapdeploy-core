@@ -6,19 +6,19 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID           string    `json:"id" db:"id"`
-	Email        string    `json:"email" db:"email"`
-	Username     string    `json:"username" db:"username"`
-	CognitoUserID string   `json:"cognito_user_id" db:"cognito_user_id"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	ID          string    `json:"id" db:"id"`
+	Email       string    `json:"email" db:"email"`
+	Username    string    `json:"username" db:"username"`
+	ClerkUserID string    `json:"clerk_user_id" db:"clerk_user_id"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // CreateUserRequest represents the request to create a new user
 type CreateUserRequest struct {
-	Email        string `json:"email" validate:"required,email"`
-	Username     string `json:"username" validate:"required,min=3,max=50"`
-	CognitoUserID string `json:"cognito_user_id" validate:"required"`
+	Email       string `json:"email" validate:"required,email"`
+	Username    string `json:"username" validate:"required,min=3,max=50"`
+	ClerkUserID string `json:"clerk_user_id" validate:"required"`
 }
 
 // UpdateUserRequest represents the request to update a user

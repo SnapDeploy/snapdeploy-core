@@ -1,5 +1,5 @@
 -- name: CreateUser :one
-INSERT INTO users (id, email, username, cognito_user_id)
+INSERT INTO users (id, email, username, clerk_user_id)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
@@ -11,9 +11,9 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM users
 WHERE email = $1 LIMIT 1;
 
--- name: GetUserByCognitoID :one
+-- name: GetUserByClerkID :one
 SELECT * FROM users
-WHERE cognito_user_id = $1 LIMIT 1;
+WHERE clerk_user_id = $1 LIMIT 1;
 
 -- name: UpdateUser :one
 UPDATE users

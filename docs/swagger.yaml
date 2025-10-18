@@ -65,7 +65,7 @@ info:
   contact:
     email: support@snapdeploy.com
     name: SnapDeploy Team
-  description: A modern deployment management system with AWS Cognito authentication
+  description: A modern user management system with Clerk authentication
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -90,7 +90,7 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
-      - CognitoAuth: []
+      - ClerkAuth: []
       summary: Get current user information
       tags:
       - Authentication
@@ -137,7 +137,7 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
-      - CognitoAuth: []
+      - ClerkAuth: []
       summary: List users
       tags:
       - Users
@@ -166,7 +166,7 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
-      - CognitoAuth: []
+      - ClerkAuth: []
       summary: Delete user
       tags:
       - Users
@@ -196,7 +196,7 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
-      - CognitoAuth: []
+      - ClerkAuth: []
       summary: Get user by ID
       tags:
       - Users
@@ -236,13 +236,13 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
-      - CognitoAuth: []
+      - ClerkAuth: []
       summary: Update user
       tags:
       - Users
 securityDefinitions:
-  CognitoAuth:
-    description: AWS Cognito JWT token
+  ClerkAuth:
+    description: Clerk JWT token
     in: header
     name: Authorization
     type: apiKey

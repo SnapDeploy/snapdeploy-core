@@ -13,8 +13,7 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
-	AWS      AWSConfig
-	JWT      JWTConfig
+	Clerk    ClerkConfig
 }
 
 // ServerConfig holds server configuration
@@ -34,16 +33,12 @@ type DatabaseConfig struct {
 	MinConns int
 }
 
-// AWSConfig holds AWS configuration
-type AWSConfig struct {
-	Region          string
-	CognitoUserPool string
-	CognitoClientID string
-}
-
-// JWTConfig holds JWT configuration
-type JWTConfig struct {
-	Issuer string
+// ClerkConfig holds Clerk configuration
+type ClerkConfig struct {
+	PublishableKey string
+	SecretKey      string
+	JWKSURL        string
+	Issuer         string
 }
 
 // Load loads configuration from environment variables
@@ -68,13 +63,11 @@ func Load() (*Config, error) {
 			MaxConns: getEnvAsInt("DB_MAX_CONNS", 25),
 			MinConns: getEnvAsInt("DB_MIN_CONNS", 5),
 		},
-		AWS: AWSConfig{
-			Region:          getEnv("AWS_REGION", "us-east-1"),
-			CognitoUserPool: getEnv("AWS_COGNITO_USER_POOL", ""),
-			CognitoClientID: getEnv("AWS_COGNITO_CLIENT_ID", ""),
-		},
-		JWT: JWTConfig{
-			Issuer: getEnv("JWT_ISSUER", ""),
+		Clerk: ClerkConfig{
+			PublishableKey: getEnv("CLERK_PUBLISHABLE_KEY", ""),
+			SecretKey:      getEnv("CLERK_SECRET_KEY", ""),
+			JWKSURL:        getEnv("CLERK_JWKS_URL", ""),
+			Issuer:         getEnv("CLERK_ISSUER", ""),
 		},
 	}
 
@@ -88,14 +81,17 @@ func Load() (*Config, error) {
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
-	if c.AWS.CognitoUserPool == "" {
-		return fmt.Errorf("AWS_COGNITO_USER_POOL is required")
+	if c.Clerk.PublishableKey == "" {
+		return fmt.Errorf("CLERK_PUBLISHABLE_KEY is required")
 	}
-	if c.AWS.CognitoClientID == "" {
-		return fmt.Errorf("AWS_COGNITO_CLIENT_ID is required")
+	if c.Clerk.SecretKey == "" {
+		return fmt.Errorf("CLERK_SECRET_KEY is required")
 	}
-	if c.JWT.Issuer == "" {
-		return fmt.Errorf("JWT_ISSUER is required")
+	if c.Clerk.JWKSURL == "" {
+		return fmt.Errorf("CLERK_JWKS_URL is required")
+	}
+	if c.Clerk.Issuer == "" {
+		return fmt.Errorf("CLERK_ISSUER is required")
 	}
 	return nil
 }
