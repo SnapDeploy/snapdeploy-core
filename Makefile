@@ -18,6 +18,7 @@ help:
 	@echo "  deps         - Download and tidy dependencies"
 	@echo "  fmt          - Format code"
 	@echo "  lint         - Lint code"
+	@echo "  lint-fix     - Lint and fix code automatically"
 	@echo "  docker-up    - Start PostgreSQL with Docker Compose"
 	@echo "  docker-down  - Stop Docker Compose services"
 	@echo "  docker-build - Build Docker image"
@@ -82,7 +83,13 @@ fmt:
 
 # Lint code
 lint:
-	golangci-lint run
+	go vet ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+# Lint and fix code
+lint-fix: fmt
+	@echo "Running linters..."
+	@make lint
 
 # Docker Compose commands
 docker-up:

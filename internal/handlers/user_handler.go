@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"snapdeploy-core/internal/middleware"
 	"snapdeploy-core/internal/models"
 	"snapdeploy-core/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 // UserHandler handles user-related HTTP requests

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -39,6 +38,7 @@ type ClerkConfig struct {
 	SecretKey      string
 	JWKSURL        string
 	Issuer         string
+	APIURL         string
 }
 
 // Load loads configuration from environment variables
@@ -68,6 +68,7 @@ func Load() (*Config, error) {
 			SecretKey:      getEnv("CLERK_SECRET_KEY", ""),
 			JWKSURL:        getEnv("CLERK_JWKS_URL", ""),
 			Issuer:         getEnv("CLERK_ISSUER", ""),
+			APIURL:         getEnv("CLERK_API_URL", "https://api.clerk.com/v1"),
 		},
 	}
 
@@ -115,24 +116,6 @@ func getEnvAsInt(key string, fallback int) int {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
 		}
-	}
-	return fallback
-}
-
-// getEnvAsBool gets an environment variable as boolean with a fallback value
-func getEnvAsBool(key string, fallback bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if boolValue, err := strconv.ParseBool(value); err == nil {
-			return boolValue
-		}
-	}
-	return fallback
-}
-
-// getEnvAsSlice gets an environment variable as slice with a fallback value
-func getEnvAsSlice(key, separator string, fallback []string) []string {
-	if value := os.Getenv(key); value != "" {
-		return strings.Split(value, separator)
 	}
 	return fallback
 }

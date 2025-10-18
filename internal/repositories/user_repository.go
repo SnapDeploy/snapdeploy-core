@@ -24,12 +24,12 @@ func NewUserRepository(db *database.DB) *UserRepository {
 // Create creates a new user
 func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID: %w", err)
 	}
-	
+
 	dbUser, err := queries.CreateUser(ctx, &database.CreateUserParams{
 		ID:          userID,
 		Email:       user.Email,
@@ -46,12 +46,12 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 // GetByID retrieves a user by ID
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	userID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID: %w", err)
 	}
-	
+
 	dbUser, err := queries.GetUserByID(ctx, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -66,7 +66,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, 
 // GetByEmail retrieves a user by email
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	dbUser, err := queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -81,7 +81,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 // GetByClerkID retrieves a user by Clerk user ID
 func (r *UserRepository) GetByClerkID(ctx context.Context, clerkUserID string) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	dbUser, err := queries.GetUserByClerkID(ctx, clerkUserID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -96,12 +96,12 @@ func (r *UserRepository) GetByClerkID(ctx context.Context, clerkUserID string) (
 // Update updates a user
 func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID: %w", err)
 	}
-	
+
 	dbUser, err := queries.UpdateUser(ctx, &database.UpdateUserParams{
 		Email:    user.Email,
 		Username: user.Username,
@@ -117,12 +117,12 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models
 // Delete deletes a user
 func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	queries := database.New(r.db.GetConnection())
-	
+
 	userID, err := uuid.Parse(id)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	
+
 	err = queries.DeleteUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
@@ -134,7 +134,7 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 // List retrieves a list of users with pagination
 func (r *UserRepository) List(ctx context.Context, limit, offset int32) ([]*models.User, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	dbUsers, err := queries.ListUsers(ctx, &database.ListUsersParams{
 		Limit:  limit,
 		Offset: offset,
@@ -154,7 +154,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int32) ([]*mode
 // Count returns the total number of users
 func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 	queries := database.New(r.db.GetConnection())
-	
+
 	count, err := queries.CountUsers(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count users: %w", err)

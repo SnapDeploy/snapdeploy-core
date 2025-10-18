@@ -122,3 +122,4 @@ GIN_MODE=debug
 ```
 
 This will show detailed request logs and help debug authentication issues.
+

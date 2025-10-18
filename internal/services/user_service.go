@@ -4,21 +4,25 @@ import (
 	"context"
 	"fmt"
 
+	"snapdeploy-core/internal/clerk"
 	"snapdeploy-core/internal/middleware"
 	"snapdeploy-core/internal/models"
 	"snapdeploy-core/internal/repositories"
+
 	"github.com/google/uuid"
 )
 
 // UserService handles user business logic
 type UserService struct {
-	userRepo *repositories.UserRepository
+	userRepo    *repositories.UserRepository
+	clerkClient *clerk.Client
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo *repositories.UserRepository) *UserService {
+func NewUserService(userRepo *repositories.UserRepository, clerkClient *clerk.Client) *UserService {
 	return &UserService{
-		userRepo: userRepo,
+		userRepo:    userRepo,
+		clerkClient: clerkClient,
 	}
 }
 
@@ -38,7 +42,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *models.CreateUserRequ
 
 	// Create new user
 	user := &models.User{
-		ID:          generateID(), // You'll need to implement this
+		ID:          generateID(),
 		Email:       req.Email,
 		Username:    req.Username,
 		ClerkUserID: req.ClerkUserID,
@@ -117,17 +121,25 @@ func (s *UserService) ListUsers(ctx context.Context, page, limit int32) ([]*mode
 
 // GetOrCreateUserByClerkID gets an existing user or creates a new one based on Clerk user ID
 func (s *UserService) GetOrCreateUserByClerkID(ctx context.Context, clerkUser *middleware.ClerkUser) (*models.User, error) {
+	clerkUserID := clerkUser.GetUserID()
+
 	// Try to get existing user
-	user, err := s.userRepo.GetByClerkID(ctx, clerkUser.GetUserID())
+	user, err := s.userRepo.GetByClerkID(ctx, clerkUserID)
 	if err == nil {
 		return user, nil
 	}
 
-	// User doesn't exist, create new one
+	// User doesn't exist, fetch full user data from Clerk API
+	clerkUserData, err := s.clerkClient.GetUser(ctx, clerkUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user from Clerk: %w", err)
+	}
+
+	// Create new user with data from Clerk API
 	createReq := &models.CreateUserRequest{
-		Email:       clerkUser.GetEmail(),
-		Username:    clerkUser.GetUsername(),
-		ClerkUserID: clerkUser.GetUserID(),
+		Email:       clerkUserData.Email,
+		Username:    clerkUserData.Username,
+		ClerkUserID: clerkUserData.ID,
 	}
 
 	return s.CreateUser(ctx, createReq)

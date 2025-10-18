@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/gin-gonic/gin"
 	"snapdeploy-core/internal/config"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // JWK represents a JSON Web Key

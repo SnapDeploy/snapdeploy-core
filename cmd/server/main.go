@@ -9,15 +9,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	"snapdeploy-core/internal/clerk"
 	"snapdeploy-core/internal/config"
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/handlers"
 	"snapdeploy-core/internal/middleware"
 	"snapdeploy-core/internal/repositories"
 	"snapdeploy-core/internal/services"
+
+	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // @title SnapDeploy Core API
@@ -56,8 +58,11 @@ func main() {
 	// Initialize repositories
 	userRepo := repositories.NewUserRepository(db)
 
+	// Initialize Clerk client
+	clerkClient := clerk.NewClient(&cfg.Clerk)
+
 	// Initialize services
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, clerkClient)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler()
@@ -80,14 +85,27 @@ func main() {
 	// Add middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	router.Use(middleware.CORS())
+	// allow from all origins
+	router.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
 
-	// Health check endpoint (no auth required)
-	router.GET("/health", healthHandler.Health)
+		// Handle preflight OPTIONS requests
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
+		// Health check endpoint (no auth required)
+		v1.GET("/health", healthHandler.Health)
+
 		// Auth routes
 		auth := v1.Group("/auth")
 		auth.Use(authMiddleware.RequireAuth())
