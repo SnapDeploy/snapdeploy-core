@@ -189,3 +189,102 @@ func (c *Client) GetUserByEmail(ctx context.Context, email string) (*User, error
 
 	return &usersResp.Data[0], nil
 }
+
+// ExternalAccount represents an external OAuth account
+type ExternalAccount struct {
+	ID             string                 `json:"id"`
+	Provider       string                 `json:"provider"`
+	ProviderUserID string                 `json:"provider_user_id"`
+	ApprovedScopes string                 `json:"approved_scopes"`
+	EmailAddress   string                 `json:"email_address"`
+	Username       string                 `json:"username"`
+	PublicMetadata map[string]interface{} `json:"public_metadata"`
+}
+
+// UserWithExternalAccounts represents a Clerk user with external accounts
+type UserWithExternalAccounts struct {
+	ID               string            `json:"id"`
+	ExternalAccounts []ExternalAccount `json:"external_accounts"`
+}
+
+// GetGitHubAccessToken fetches the GitHub OAuth access token for a user
+func (c *Client) GetGitHubAccessToken(ctx context.Context, userID string) (string, error) {
+	// Use the correct Clerk API endpoint for OAuth access tokens
+	// https://api.clerk.com/v1/users/{user_id}/oauth_access_tokens/{provider}
+	url := fmt.Sprintf("%s/users/%s/oauth_access_tokens/oauth_github", c.apiURL, userID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.secretKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch OAuth token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("clerk API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Response structure from Clerk OAuth tokens endpoint
+	var tokensResp []struct {
+		ExternalAccountID string   `json:"external_account_id"`
+		Object            string   `json:"object"`
+		Token             string   `json:"token"`
+		Provider          string   `json:"provider"`
+		PublicMetadata    any      `json:"public_metadata"`
+		Label             string   `json:"label,omitempty"`
+		Scopes            []string `json:"scopes"`
+		TokenSecret       string   `json:"token_secret,omitempty"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tokensResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(tokensResp) == 0 {
+		return "", fmt.Errorf("no GitHub OAuth token found for user")
+	}
+
+	// Return the first token (most recent)
+	return tokensResp[0].Token, nil
+}
+
+// getOAuthAccessToken fetches the OAuth access token for an external account
+func (c *Client) getOAuthAccessToken(ctx context.Context, externalAccountID string) (string, error) {
+	url := fmt.Sprintf("%s/oauth_access_tokens/%s", c.apiURL, externalAccountID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.secretKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("clerk API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	return tokenResp.Token, nil
+}

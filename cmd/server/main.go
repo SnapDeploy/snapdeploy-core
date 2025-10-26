@@ -9,13 +9,16 @@ import (
 	"syscall"
 	"time"
 
+	"snapdeploy-core/internal/application/service"
 	"snapdeploy-core/internal/clerk"
 	"snapdeploy-core/internal/config"
 	"snapdeploy-core/internal/database"
-	"snapdeploy-core/internal/handlers"
+	"snapdeploy-core/internal/github"
+	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
+	infraGitHub "snapdeploy-core/internal/infrastructure/github"
+	"snapdeploy-core/internal/infrastructure/persistence"
 	"snapdeploy-core/internal/middleware"
-	"snapdeploy-core/internal/repositories"
-	"snapdeploy-core/internal/services"
+	"snapdeploy-core/internal/presentation/handlers"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -24,7 +27,7 @@ import (
 
 // @title SnapDeploy Core API
 // @version 1.0
-// @description A modern user management system with Clerk authentication
+// @description A modern deployment platform with DDD architecture
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name SnapDeploy Team
@@ -55,18 +58,29 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize repositories
-	userRepo := repositories.NewUserRepository(db)
-
-	// Initialize Clerk client
+	// Initialize infrastructure layer
+	// External service clients
 	clerkClient := clerk.NewClient(&cfg.Clerk)
+	githubClient := github.NewClient()
 
-	// Initialize services
-	userService := services.NewUserService(userRepo, clerkClient)
+	// Infrastructure implementations of domain services
+	clerkService := infraClerk.NewClerkService(clerkClient)
+	githubService := infraGitHub.NewGitHubService(githubClient)
 
-	// Initialize handlers
+	// Repository implementations
+	userRepository := persistence.NewUserRepository(db)
+	repositoryRepository := persistence.NewRepositoryRepository(db)
+
+	// Initialize application layer
+	// Application services (use cases)
+	userService := service.NewUserService(userRepository, clerkService)
+	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
+
+	// Initialize presentation layer
+	// HTTP handlers
 	healthHandler := handlers.NewHealthHandler()
 	userHandler := handlers.NewUserHandler(userService)
+	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
 
 	// Initialize auth middleware
 	authMiddleware, err := middleware.NewAuthMiddleware(cfg)
@@ -85,7 +99,8 @@ func main() {
 	// Add middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	// allow from all origins
+
+	// CORS middleware
 	router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -113,6 +128,13 @@ func main() {
 			auth.GET("/me", userHandler.GetCurrentUser)
 		}
 
+		// User routes
+		users := v1.Group("/users")
+		users.Use(authMiddleware.RequireAuth())
+		{
+			users.GET("/:id/repos", repositoryHandler.GetUserRepositories)
+			users.POST("/:id/repos/sync", repositoryHandler.SyncRepositories)
+		}
 	}
 
 	// Swagger documentation

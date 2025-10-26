@@ -10,6 +10,26 @@ import (
 	"github.com/google/uuid"
 )
 
+type Repository struct {
+	ID              uuid.UUID      `json:"id"`
+	UserID          uuid.UUID      `json:"user_id"`
+	GithubID        int64          `json:"github_id"`
+	Name            string         `json:"name"`
+	FullName        string         `json:"full_name"`
+	Description     sql.NullString `json:"description"`
+	Url             string         `json:"url"`
+	HtmlUrl         sql.NullString `json:"html_url"`
+	Private         sql.NullBool   `json:"private"`
+	Fork            sql.NullBool   `json:"fork"`
+	StargazersCount sql.NullInt32  `json:"stargazers_count"`
+	WatchersCount   sql.NullInt32  `json:"watchers_count"`
+	ForksCount      sql.NullInt32  `json:"forks_count"`
+	DefaultBranch   sql.NullString `json:"default_branch"`
+	Language        sql.NullString `json:"language"`
+	CreatedAt       sql.NullTime   `json:"created_at"`
+	UpdatedAt       sql.NullTime   `json:"updated_at"`
+}
+
 type User struct {
 	ID          uuid.UUID    `json:"id"`
 	Email       string       `json:"email"`

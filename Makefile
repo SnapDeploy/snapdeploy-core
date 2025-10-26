@@ -34,6 +34,8 @@ build:
 run:
 	go run cmd/server/main.go
 
+dev: build run
+
 # Run tests
 test:
 	go test ./...
@@ -52,11 +54,15 @@ install-tools:
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 	go install github.com/swaggo/swag/cmd/swag@latest
+	go install github.com/mikefarah/yq/v4@latest
 	@echo "Tools installed successfully!"
 
-# Generate Swagger documentation
+# Generate Swagger documentation from OpenAPI YAML
 swagger:
-	~/go/bin/swag init -g cmd/server/main.go -o ./docs
+	@echo "Converting api/openapi.yaml to docs/swagger.json and docs/swagger.yaml..."
+	~/go/bin/yq eval -o=json api/openapi.yaml > docs/swagger.json
+	cp api/openapi.yaml docs/swagger.yaml
+	@echo "Swagger documentation updated!"
 
 # Generate SQLC code
 sqlc:

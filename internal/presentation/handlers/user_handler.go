@@ -3,20 +3,19 @@ package handlers
 import (
 	"net/http"
 
+	"snapdeploy-core/internal/application/service"
 	"snapdeploy-core/internal/middleware"
-	"snapdeploy-core/internal/models"
-	"snapdeploy-core/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 // UserHandler handles user-related HTTP requests
 type UserHandler struct {
-	userService *services.UserService
+	userService *service.UserService
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userService *services.UserService) *UserHandler {
+func NewUserHandler(userService *service.UserService) *UserHandler {
 	return &UserHandler{
 		userService: userService,
 	}
@@ -29,7 +28,7 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 // @Accept json
 // @Produce json
 // @Security ClerkAuth
-// @Success 200 {object} models.UserResponse
+// @Success 200 {object} dto.UserResponse
 // @Failure 401 {object} ErrorResponse
 // @Router /auth/me [get]
 func (h *UserHandler) GetCurrentUser(c *gin.Context) {
@@ -52,8 +51,8 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	// Get or create user in our database
-	dbUser, err := h.userService.GetOrCreateUserByClerkID(c.Request.Context(), user)
+	// Get or create user using application service
+	dbUser, err := h.userService.GetOrCreateUserByClerkID(c.Request.Context(), user.GetUserID())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
@@ -63,24 +62,5 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dbUser.ToResponse())
-}
-
-// Response types
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
-}
-
-type UserListResponse struct {
-	Users      []*models.UserResponse `json:"users"`
-	Pagination PaginationResponse     `json:"pagination"`
-}
-
-type PaginationResponse struct {
-	Page       int32 `json:"page"`
-	Limit      int32 `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int64 `json:"total_pages"`
+	c.JSON(http.StatusOK, dbUser)
 }
