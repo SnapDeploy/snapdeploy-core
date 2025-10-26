@@ -1,352 +1,346 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "SnapDeploy Core API",
-    "description": "A modern API for the SnapDeploy platform",
-    "version": "1.0.0",
-    "contact": {
-      "name": "SnapDeploy Team",
-      "email": "support@snapdeploy.com"
+    "swagger": "2.0",
+    "info": {
+        "description": "A modern deployment platform with DDD architecture",
+        "title": "SnapDeploy Core API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "SnapDeploy Team",
+            "email": "support@snapdeploy.com"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
     },
-    "license": {
-      "name": "MIT",
-      "url": "https://opensource.org/licenses/MIT"
-    }
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8080/api/v1",
-      "description": "Development server"
-    },
-    {
-      "url": "https://core-dev.snap-deploy.com/api/v1",
-      "description": "Production server"
-    }
-  ],
-  "security": [
-    {
-      "CognitoAuth": []
-    }
-  ],
-  "paths": {
-    "/health": {
-      "get": {
-        "summary": "Health check endpoint",
-        "description": "Returns the health status of the API",
-        "security": [],
-        "tags": [
-          "Health"
-        ],
-        "responses": {
-          "200": {
-            "description": "Service is healthy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "ClerkAuth": []
+                    }
+                ],
+                "description": "Returns information about the currently authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get current user information",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
                 }
-              }
             }
-          }
-        }
-      }
-    },
-    "/auth/me": {
-      "get": {
-        "summary": "Get current user information",
-        "description": "Returns information about the currently authenticated user",
-        "tags": [
-          "Authentication"
-        ],
-        "responses": {
-          "200": {
-            "description": "User information retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
+        },
+        "/health": {
+            "get": {
+                "description": "Returns the health status of the service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.HealthResponse"
+                        }
+                    }
                 }
-              }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          }
-        }
-      }
-    },
-    "/users/{id}/repos/sync": {
-      "post": {
-        "summary": "Sync user repositories from GitHub",
-        "description": "Syncs the repositories for a user from GitHub",
-        "tags": [
-          "Users"
-        ],
-        "responses": {
-          "200": {
-            "description": "Repositories synced successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserRepositoriesResponse"
+        },
+        "/users/{id}/repos": {
+            "get": {
+                "security": [
+                    {
+                        "ClerkAuth": []
+                    }
+                ],
+                "description": "Returns the repositories for a user with pagination and optional search",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Repositories"
+                ],
+                "summary": "Get user repositories with search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search query (searches name, full_name, description)",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RepositoryListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
                 }
-              }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      }
-    },
-    "/users/{id}/repos": {
-      "get": {
-        "summary": "Get user repositories",
-        "description": "Returns the repositories for a user with pagination",
-        "tags": [
-          "Users"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "User ID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "description": "Page number (default is 1)",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Number of items per page (default is 20, max is 100)",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Repositories retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserRepositoriesResponse"
+        },
+        "/users/{id}/repos/sync": {
+            "post": {
+                "security": [
+                    {
+                        "ClerkAuth": []
+                    }
+                ],
+                "description": "Syncs the repositories for a user from GitHub",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Repositories"
+                ],
+                "summary": "Sync user repositories from GitHub",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RepositorySyncResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
                 }
-              }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          }
         }
-      }
-    }
-  },
-  "components": {
-    "securitySchemes": {
-      "CognitoAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "AWS Cognito JWT token"
-      }
     },
-    "schemas": {
-      "HealthResponse": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "healthy",
-              "unhealthy"
-            ]
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "version": {
-            "type": "string"
-          }
-        }
-      },
-      "User": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "username": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "UserRepositoriesSyncResponse": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        }
-      },
-      "UserRepositoriesResponse": {
-        "type": "object",
-        "properties": {
-          "repositories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Repository"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          }
-        }
-      },
-      "Repository": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "Pagination": {
-        "type": "object",
-        "properties": {
-          "page": {
-            "type": "integer",
-            "description": "Current page number"
-          },
-          "limit": {
-            "type": "integer",
-            "description": "Number of items per page"
-          },
-          "total": {
-            "type": "integer",
-            "description": "Total number of items"
-          },
-          "total_pages": {
-            "type": "integer",
-            "description": "Total number of pages"
-          }
-        }
-      },
-      "Error": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "details": {
+    "definitions": {
+        "dto.PaginationResponse": {
             "type": "object",
-            "additionalProperties": true
-          }
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.RepositoryListResponse": {
+            "type": "object",
+            "properties": {
+                "pagination": {
+                    "$ref": "#/definitions/dto.PaginationResponse"
+                },
+                "repositories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.RepositoryResponse"
+                    }
+                }
+            }
+        },
+        "dto.RepositoryResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "fork": {
+                    "type": "boolean"
+                },
+                "forks": {
+                    "type": "integer"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "html_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "private": {
+                    "type": "boolean"
+                },
+                "stars": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "watchers": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.RepositorySyncResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "hasSyncedRepositories": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
         }
-      }
     },
-    "responses": {
-      "BadRequestError": {
-        "description": "Bad request",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
+    "securityDefinitions": {
+        "ClerkAuth": {
+            "description": "Clerk JWT token",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
-      },
-      "UnauthorizedError": {
-        "description": "Unauthorized",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "NotFoundError": {
-        "description": "Resource not found",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      }
     }
-  },
-  "tags": [
-    {
-      "name": "Health",
-      "description": "Health check endpoints"
-    },
-    {
-      "name": "Authentication",
-      "description": "Authentication and user management"
-    },
-    {
-      "name": "Users",
-      "description": "User management"
-    }
-  ]
 }

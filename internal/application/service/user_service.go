@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"snapdeploy-core/internal/application/dto"
+	"snapdeploy-core/internal/domain/repo"
 	"snapdeploy-core/internal/domain/user"
 )
 
@@ -23,13 +24,15 @@ type ClerkService interface {
 // UserService handles user-related use cases
 type UserService struct {
 	userRepo    user.Repository
+	repoRepo    repo.RepositoryRepo
 	clerkClient ClerkService
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo user.Repository, clerkClient ClerkService) *UserService {
+func NewUserService(userRepo user.Repository, repoRepo repo.RepositoryRepo, clerkClient ClerkService) *UserService {
 	return &UserService{
 		userRepo:    userRepo,
+		repoRepo:    repoRepo,
 		clerkClient: clerkClient,
 	}
 }
@@ -61,7 +64,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	return s.toDTO(domainUser), nil
+	return s.toDTO(ctx, domainUser), nil
 }
 
 // GetUserByID retrieves a user by ID
@@ -76,7 +79,7 @@ func (s *UserService) GetUserByID(ctx context.Context, id string) (*dto.UserResp
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
-	return s.toDTO(domainUser), nil
+	return s.toDTO(ctx, domainUser), nil
 }
 
 // GetUserByClerkID retrieves a user by Clerk ID
@@ -91,7 +94,7 @@ func (s *UserService) GetUserByClerkID(ctx context.Context, clerkUserID string) 
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
-	return s.toDTO(domainUser), nil
+	return s.toDTO(ctx, domainUser), nil
 }
 
 // GetOrCreateUserByClerkID gets or creates a user based on Clerk ID
@@ -104,7 +107,7 @@ func (s *UserService) GetOrCreateUserByClerkID(ctx context.Context, clerkUserID 
 	// Try to find existing user
 	domainUser, err := s.userRepo.FindByClerkID(ctx, clerkID)
 	if err == nil {
-		return s.toDTO(domainUser), nil
+		return s.toDTO(ctx, domainUser), nil
 	}
 
 	// User doesn't exist, fetch from Clerk and create
@@ -123,7 +126,7 @@ func (s *UserService) GetOrCreateUserByClerkID(ctx context.Context, clerkUserID 
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	return s.toDTO(domainUser), nil
+	return s.toDTO(ctx, domainUser), nil
 }
 
 // UpdateUser updates a user
@@ -166,7 +169,7 @@ func (s *UserService) UpdateUser(ctx context.Context, id string, req *dto.Update
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	return s.toDTO(domainUser), nil
+	return s.toDTO(ctx, domainUser), nil
 }
 
 // DeleteUser deletes a user
@@ -212,7 +215,7 @@ func (s *UserService) ListUsers(ctx context.Context, page, limit int32) (*dto.Us
 
 	userResponses := make([]*dto.UserResponse, len(users))
 	for i, u := range users {
-		userResponses[i] = s.toDTO(u)
+		userResponses[i] = s.toDTO(ctx, u)
 	}
 
 	totalPages := (total + int64(limit) - 1) / int64(limit)
@@ -229,12 +232,20 @@ func (s *UserService) ListUsers(ctx context.Context, page, limit int32) (*dto.Us
 }
 
 // toDTO converts a domain user to DTO
-func (s *UserService) toDTO(u *user.User) *dto.UserResponse {
+func (s *UserService) toDTO(ctx context.Context, u *user.User) *dto.UserResponse {
+	// Check if user has synced repositories
+	hasSyncedRepos := false
+	count, err := s.repoRepo.CountByUserID(ctx, u.ID())
+	if err == nil && count > 0 {
+		hasSyncedRepos = true
+	}
+
 	return &dto.UserResponse{
-		ID:        u.ID().String(),
-		Email:     u.Email().String(),
-		Username:  u.Username().String(),
-		CreatedAt: u.CreatedAt(),
-		UpdatedAt: u.UpdatedAt(),
+		ID:                    u.ID().String(),
+		Email:                 u.Email().String(),
+		Username:              u.Username().String(),
+		HasSyncedRepositories: hasSyncedRepos,
+		CreatedAt:             u.CreatedAt(),
+		UpdatedAt:             u.UpdatedAt(),
 	}
 }

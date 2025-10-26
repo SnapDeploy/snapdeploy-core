@@ -22,3 +22,8 @@ type RepositoryListResponse struct {
 	Repositories []*RepositoryResponse `json:"repositories"`
 	Pagination   PaginationResponse    `json:"pagination"`
 }
+
+// RepositorySyncResponse represents the response from syncing repositories
+type RepositorySyncResponse struct {
+	Message string `json:"message"`
+}

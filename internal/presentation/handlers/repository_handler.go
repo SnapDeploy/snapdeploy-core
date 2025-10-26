@@ -28,12 +28,12 @@ func NewRepositoryHandler(repositoryService *service.RepositoryService, clerkCli
 // SyncRepositories handles POST /users/:id/repos/sync
 // @Summary Sync user repositories from GitHub
 // @Description Syncs the repositories for a user from GitHub
-// @Tags Users
+// @Tags Repositories
 // @Accept json
 // @Produce json
 // @Security ClerkAuth
 // @Param id path string true "User ID"
-// @Success 200 {object} dto.RepositoryListResponse
+// @Success 200 {object} dto.RepositorySyncResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -86,15 +86,16 @@ func (h *RepositoryHandler) SyncRepositories(c *gin.Context) {
 }
 
 // GetUserRepositories handles GET /users/:id/repos
-// @Summary Get user repositories
-// @Description Returns the repositories for a user with pagination
-// @Tags Users
+// @Summary Get user repositories with search
+// @Description Returns the repositories for a user with pagination and optional search
+// @Tags Repositories
 // @Accept json
 // @Produce json
 // @Security ClerkAuth
 // @Param id path string true "User ID"
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
+// @Param search query string false "Search query (searches name, full_name, description)"
 // @Success 200 {object} dto.RepositoryListResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -118,10 +119,14 @@ func (h *RepositoryHandler) GetUserRepositories(c *gin.Context) {
 		}
 	}
 
+	// Get search query
+	searchQuery := c.DefaultQuery("search", "")
+
 	// Fetch repositories using application service
 	response, err := h.repositoryService.GetRepositoriesByUserID(
 		c.Request.Context(),
 		userID,
+		searchQuery,
 		int32(page),
 		int32(limit),
 	)

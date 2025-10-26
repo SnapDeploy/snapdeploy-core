@@ -25,7 +25,7 @@ func NewRepositoryService(repoRepo repo.RepositoryRepo, githubService repo.GitHu
 }
 
 // SyncRepositoriesFromGitHub fetches repositories from GitHub and syncs them
-func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, userID string, githubAccessToken string) (*dto.RepositoryListResponse, error) {
+func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, userID string, githubAccessToken string) (*dto.RepositorySyncResponse, error) {
 	// Parse user ID
 	uid, err := user.ParseUserID(userID)
 	if err != nil {
@@ -99,25 +99,13 @@ func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, user
 		}
 	}
 
-	// Convert to DTOs
-	repoResponses := make([]*dto.RepositoryResponse, len(repositories))
-	for i, repository := range repositories {
-		repoResponses[i] = s.toDTO(repository)
-	}
-
-	return &dto.RepositoryListResponse{
-		Repositories: repoResponses,
-		Pagination: dto.PaginationResponse{
-			Page:       1,
-			Limit:      int32(len(repositories)),
-			Total:      int64(len(repositories)),
-			TotalPages: 1,
-		},
+	return &dto.RepositorySyncResponse{
+		Message: "success",
 	}, nil
 }
 
-// GetRepositoriesByUserID retrieves repositories for a user with pagination
-func (s *RepositoryService) GetRepositoriesByUserID(ctx context.Context, userID string, page, limit int32) (*dto.RepositoryListResponse, error) {
+// GetRepositoriesByUserID retrieves repositories for a user with pagination and optional search
+func (s *RepositoryService) GetRepositoriesByUserID(ctx context.Context, userID string, searchQuery string, page, limit int32) (*dto.RepositoryListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -132,14 +120,30 @@ func (s *RepositoryService) GetRepositoriesByUserID(ctx context.Context, userID 
 
 	offset := (page - 1) * limit
 
-	repositories, err := s.repoRepo.FindByUserID(ctx, uid, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch repositories: %w", err)
-	}
+	var repositories []*repo.Repository
+	var total int64
 
-	total, err := s.repoRepo.CountByUserID(ctx, uid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count repositories: %w", err)
+	// Use search if query provided
+	if searchQuery != "" {
+		repositories, err = s.repoRepo.SearchByUserID(ctx, uid, searchQuery, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search repositories: %w", err)
+		}
+
+		total, err = s.repoRepo.CountSearchByUserID(ctx, uid, searchQuery)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count search repositories: %w", err)
+		}
+	} else {
+		repositories, err = s.repoRepo.FindByUserID(ctx, uid, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch repositories: %w", err)
+		}
+
+		total, err = s.repoRepo.CountByUserID(ctx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count repositories: %w", err)
+		}
 	}
 
 	repoResponses := make([]*dto.RepositoryResponse, len(repositories))

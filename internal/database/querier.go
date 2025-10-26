@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CountRepositoriesByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountSearchRepositoriesByUserID(ctx context.Context, arg *CountSearchRepositoriesByUserIDParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
 	DeleteRepository(ctx context.Context, id uuid.UUID) error
@@ -22,6 +23,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User, error)
+	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)
 	UpsertRepository(ctx context.Context, arg *UpsertRepositoryParams) (*Repository, error)
 }

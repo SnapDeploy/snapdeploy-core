@@ -73,7 +73,7 @@ func main() {
 
 	// Initialize application layer
 	// Application services (use cases)
-	userService := service.NewUserService(userRepository, clerkService)
+	userService := service.NewUserService(userRepository, repositoryRepository, clerkService)
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
 
 	// Initialize presentation layer

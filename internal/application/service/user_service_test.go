@@ -124,8 +124,9 @@ func (m *mockClerkService) GetUser(ctx context.Context, clerkUserID string) (*se
 
 func TestUserService_CreateUser(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	req := &dto.CreateUserRequest{
 		Email:       "test@example.com",
@@ -149,8 +150,9 @@ func TestUserService_CreateUser(t *testing.T) {
 func TestUserService_CreateUserDuplicate(t *testing.T) {
 	repo := newMockUserRepository()
 	repo.existsByEmail = true
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	req := &dto.CreateUserRequest{
 		Email:       "test@example.com",
@@ -166,8 +168,9 @@ func TestUserService_CreateUserDuplicate(t *testing.T) {
 
 func TestUserService_GetUserByID(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	// Create a user first
 	usr, _ := user.NewUser("test@example.com", "testuser", "user_123")
@@ -185,8 +188,9 @@ func TestUserService_GetUserByID(t *testing.T) {
 
 func TestUserService_GetOrCreateUserByClerkID(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	// User doesn't exist, should create
 	resp, err := svc.GetOrCreateUserByClerkID(context.Background(), "user_123")
@@ -211,8 +215,9 @@ func TestUserService_GetOrCreateUserByClerkID(t *testing.T) {
 
 func TestUserService_UpdateUser(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	// Create a user first
 	usr, _ := user.NewUser("test@example.com", "testuser", "user_123")
@@ -240,8 +245,9 @@ func TestUserService_UpdateUser(t *testing.T) {
 
 func TestUserService_DeleteUser(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	// Create a user first
 	usr, _ := user.NewUser("test@example.com", "testuser", "user_123")
@@ -261,8 +267,9 @@ func TestUserService_DeleteUser(t *testing.T) {
 
 func TestUserService_ListUsers(t *testing.T) {
 	repo := newMockUserRepository()
+	repoRepo := newMockRepositoryRepo()
 	clerkSvc := &mockClerkService{}
-	svc := service.NewUserService(repo, clerkSvc)
+	svc := service.NewUserService(repo, repoRepo, clerkSvc)
 
 	// Create multiple users
 	usr1, _ := user.NewUser("test1@example.com", "user1", "user_1")

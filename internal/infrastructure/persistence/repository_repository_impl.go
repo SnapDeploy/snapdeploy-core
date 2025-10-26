@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/domain/repo"
@@ -97,11 +98,58 @@ func (r *RepositoryRepoImpl) FindByUserID(ctx context.Context, userID user.UserI
 	return repositories, nil
 }
 
+// SearchByUserID searches repositories for a user with optional search query
+func (r *RepositoryRepoImpl) SearchByUserID(ctx context.Context, userID user.UserID, searchQuery string, limit, offset int32) ([]*repo.Repository, error) {
+	// If no search query, use regular find
+	if strings.TrimSpace(searchQuery) == "" {
+		return r.FindByUserID(ctx, userID, limit, offset)
+	}
+
+	dbRepos, err := r.queries.SearchRepositoriesByUserID(ctx, &database.SearchRepositoriesByUserIDParams{
+		UserID:  userID.UUID(),
+		Column2: sql.NullString{String: searchQuery, Valid: true},
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search repositories: %w", err)
+	}
+
+	repositories := make([]*repo.Repository, len(dbRepos))
+	for i, dbRepo := range dbRepos {
+		domainRepo, err := r.toDomain(dbRepo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert repository: %w", err)
+		}
+		repositories[i] = domainRepo
+	}
+
+	return repositories, nil
+}
+
 // CountByUserID returns the total number of repositories for a user
 func (r *RepositoryRepoImpl) CountByUserID(ctx context.Context, userID user.UserID) (int64, error) {
 	count, err := r.queries.CountRepositoriesByUserID(ctx, userID.UUID())
 	if err != nil {
 		return 0, fmt.Errorf("failed to count repositories: %w", err)
+	}
+
+	return count, nil
+}
+
+// CountSearchByUserID returns the total number of repositories matching search for a user
+func (r *RepositoryRepoImpl) CountSearchByUserID(ctx context.Context, userID user.UserID, searchQuery string) (int64, error) {
+	// If no search query, use regular count
+	if strings.TrimSpace(searchQuery) == "" {
+		return r.CountByUserID(ctx, userID)
+	}
+
+	count, err := r.queries.CountSearchRepositoriesByUserID(ctx, &database.CountSearchRepositoriesByUserIDParams{
+		UserID:  userID.UUID(),
+		Column2: sql.NullString{String: searchQuery, Valid: true},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count search repositories: %w", err)
 	}
 
 	return count, nil

@@ -70,6 +70,33 @@ func (m *mockRepositoryRepo) CountByUserID(ctx context.Context, userID user.User
 	return count, nil
 }
 
+func (m *mockRepositoryRepo) SearchByUserID(ctx context.Context, userID user.UserID, searchQuery string, limit, offset int32) ([]*repo.Repository, error) {
+	if m.shouldError {
+		return nil, errors.New("repository error")
+	}
+	// Simple mock: just return matching repositories
+	var result []*repo.Repository
+	for _, repository := range m.repos {
+		if repository.UserID().Equals(userID) {
+			result = append(result, repository)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockRepositoryRepo) CountSearchByUserID(ctx context.Context, userID user.UserID, searchQuery string) (int64, error) {
+	if m.shouldError {
+		return 0, errors.New("repository error")
+	}
+	count := int64(0)
+	for _, repository := range m.repos {
+		if repository.UserID().Equals(userID) {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (m *mockRepositoryRepo) FindByURL(ctx context.Context, url repo.URL) (*repo.Repository, error) {
 	if m.shouldError {
 		return nil, errors.New("repository error")
@@ -134,12 +161,8 @@ func TestRepositoryService_SyncRepositoriesFromGitHub(t *testing.T) {
 		t.Fatalf("SyncRepositoriesFromGitHub() error = %v", err)
 	}
 
-	if len(resp.Repositories) != 1 {
-		t.Errorf("len(Repositories) = %v, want 1", len(resp.Repositories))
-	}
-
-	if resp.Repositories[0].Name != "test-repo" {
-		t.Errorf("Name = %v, want test-repo", resp.Repositories[0].Name)
+	if resp.Message != "success" {
+		t.Errorf("Message = %v, want success", resp.Message)
 	}
 }
 
@@ -154,6 +177,10 @@ func TestRepositoryService_SyncRepositoriesUpdate(t *testing.T) {
 	resp1, err := svc.SyncRepositoriesFromGitHub(context.Background(), userID.String(), "token")
 	if err != nil {
 		t.Fatalf("SyncRepositoriesFromGitHub() error = %v", err)
+	}
+
+	if resp1.Message != "success" {
+		t.Errorf("Message = %v, want success", resp1.Message)
 	}
 
 	// Update GitHub data
@@ -183,13 +210,22 @@ func TestRepositoryService_SyncRepositoriesUpdate(t *testing.T) {
 		t.Fatalf("SyncRepositoriesFromGitHub() error = %v", err)
 	}
 
-	if resp2.Repositories[0].Stars != 20 {
-		t.Errorf("Stars = %v, want 20", resp2.Repositories[0].Stars)
+	if resp2.Message != "success" {
+		t.Errorf("Message = %v, want success", resp2.Message)
 	}
 
-	// Should be the same repository (updated, not duplicated)
-	if resp1.Repositories[0].ID != resp2.Repositories[0].ID {
-		t.Error("Repository should be updated, not duplicated")
+	// Verify update by fetching repositories
+	repos, err := svc.GetRepositoriesByUserID(context.Background(), userID.String(), "", 1, 10)
+	if err != nil {
+		t.Fatalf("GetRepositoriesByUserID() error = %v", err)
+	}
+
+	if len(repos.Repositories) != 1 {
+		t.Errorf("len(Repositories) = %v, want 1 (should be updated, not duplicated)", len(repos.Repositories))
+	}
+
+	if repos.Repositories[0].Stars != 20 {
+		t.Errorf("Stars = %v, want 20", repos.Repositories[0].Stars)
 	}
 }
 
@@ -206,7 +242,7 @@ func TestRepositoryService_GetRepositoriesByUserID(t *testing.T) {
 	_ = repoRepo.Save(context.Background(), r1)
 	_ = repoRepo.Save(context.Background(), r2)
 
-	resp, err := svc.GetRepositoriesByUserID(context.Background(), userID.String(), 1, 10)
+	resp, err := svc.GetRepositoriesByUserID(context.Background(), userID.String(), "", 1, 10)
 	if err != nil {
 		t.Fatalf("GetRepositoriesByUserID() error = %v", err)
 	}
@@ -227,7 +263,7 @@ func TestRepositoryService_GetRepositoriesWithPagination(t *testing.T) {
 	userID := user.NewUserID()
 
 	// Test with default values (should clamp)
-	resp, err := svc.GetRepositoriesByUserID(context.Background(), userID.String(), 0, 0)
+	resp, err := svc.GetRepositoriesByUserID(context.Background(), userID.String(), "", 0, 0)
 	if err != nil {
 		t.Fatalf("GetRepositoriesByUserID() error = %v", err)
 	}
@@ -240,7 +276,7 @@ func TestRepositoryService_GetRepositoriesWithPagination(t *testing.T) {
 	}
 
 	// Test with too large limit (should clamp to 20)
-	resp, err = svc.GetRepositoriesByUserID(context.Background(), userID.String(), 1, 200)
+	resp, err = svc.GetRepositoriesByUserID(context.Background(), userID.String(), "", 1, 200)
 	if err != nil {
 		t.Fatalf("GetRepositoriesByUserID() error = %v", err)
 	}

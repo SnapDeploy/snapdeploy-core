@@ -17,11 +17,12 @@ type UpdateUserRequest struct {
 
 // UserResponse represents user data in API responses
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Username  string    `json:"username"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                    string    `json:"id"`
+	Email                 string    `json:"email"`
+	Username              string    `json:"username"`
+	HasSyncedRepositories bool      `json:"hasSyncedRepositories"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 // UserListResponse represents a paginated list of users

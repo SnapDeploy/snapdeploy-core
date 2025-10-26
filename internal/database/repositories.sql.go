@@ -24,6 +24,28 @@ func (q *Queries) CountRepositoriesByUserID(ctx context.Context, userID uuid.UUI
 	return count, err
 }
 
+const CountSearchRepositoriesByUserID = `-- name: CountSearchRepositoriesByUserID :one
+SELECT COUNT(*) FROM repositories
+WHERE user_id = $1
+  AND (
+    name LIKE '%' || $2 || '%' OR
+    full_name LIKE '%' || $2 || '%' OR
+    description LIKE '%' || $2 || '%'
+  )
+`
+
+type CountSearchRepositoriesByUserIDParams struct {
+	UserID  uuid.UUID      `json:"user_id"`
+	Column2 sql.NullString `json:"column_2"`
+}
+
+func (q *Queries) CountSearchRepositoriesByUserID(ctx context.Context, arg *CountSearchRepositoriesByUserIDParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, CountSearchRepositoriesByUserID, arg.UserID, arg.Column2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const DeleteRepository = `-- name: DeleteRepository :exec
 DELETE FROM repositories
 WHERE id = $1
@@ -116,6 +138,71 @@ func (q *Queries) GetRepositoryByURL(ctx context.Context, url string) (*Reposito
 		&i.UpdatedAt,
 	)
 	return &i, err
+}
+
+const SearchRepositoriesByUserID = `-- name: SearchRepositoriesByUserID :many
+SELECT id, user_id, github_id, name, full_name, description, url, html_url, private, fork, stargazers_count, watchers_count, forks_count, default_branch, language, created_at, updated_at FROM repositories
+WHERE user_id = $1
+  AND (
+    name LIKE '%' || $2 || '%' OR
+    full_name LIKE '%' || $2 || '%' OR
+    description LIKE '%' || $2 || '%'
+  )
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type SearchRepositoriesByUserIDParams struct {
+	UserID  uuid.UUID      `json:"user_id"`
+	Column2 sql.NullString `json:"column_2"`
+	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
+}
+
+func (q *Queries) SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error) {
+	rows, err := q.db.QueryContext(ctx, SearchRepositoriesByUserID,
+		arg.UserID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*Repository{}
+	for rows.Next() {
+		var i Repository
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.GithubID,
+			&i.Name,
+			&i.FullName,
+			&i.Description,
+			&i.Url,
+			&i.HtmlUrl,
+			&i.Private,
+			&i.Fork,
+			&i.StargazersCount,
+			&i.WatchersCount,
+			&i.ForksCount,
+			&i.DefaultBranch,
+			&i.Language,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const UpsertRepository = `-- name: UpsertRepository :one
