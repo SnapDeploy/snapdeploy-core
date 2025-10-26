@@ -113,15 +113,6 @@ func main() {
 			auth.GET("/me", userHandler.GetCurrentUser)
 		}
 
-		// User management routes
-		users := v1.Group("/users")
-		users.Use(authMiddleware.RequireAuth())
-		{
-			users.GET("", userHandler.ListUsers)
-			users.GET("/:id", userHandler.GetUserByID)
-			users.PUT("/:id", userHandler.UpdateUser)
-			users.DELETE("/:id", userHandler.DeleteUser)
-		}
 	}
 
 	// Swagger documentation
