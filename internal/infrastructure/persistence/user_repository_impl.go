@@ -24,12 +24,13 @@ func (r *UserRepositoryImpl) Save(ctx context.Context, usr *user.User) error {
 	queries := database.New(r.db.GetConnection())
 
 	// Check if user exists
-	existingUser, err := queries.GetUserByID(ctx, usr.ID().UUID())
+	_, err := queries.GetUserByID(ctx, usr.ID().UUID())
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to check if user exists: %w", err)
 	}
 
-	if existingUser != nil {
+	// If no error, user exists - update it
+	if err == nil {
 		// Update existing user
 		_, err := queries.UpdateUser(ctx, &database.UpdateUserParams{
 			Email:    usr.Email().String(),
@@ -40,7 +41,7 @@ func (r *UserRepositoryImpl) Save(ctx context.Context, usr *user.User) error {
 			return fmt.Errorf("failed to update user: %w", err)
 		}
 	} else {
-		// Create new user
+		// User doesn't exist (err == sql.ErrNoRows) - create it
 		_, err := queries.CreateUser(ctx, &database.CreateUserParams{
 			ID:          usr.ID().UUID(),
 			Email:       usr.Email().String(),
