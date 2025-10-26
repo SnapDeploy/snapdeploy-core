@@ -1,7 +1,7 @@
 .PHONY: help build run test clean generate migrate-up migrate-down swagger sqlc install-tools deps setup docker-up docker-down docker-build
 
-# Load environment variables
-include .env
+# Load environment variables (optional - won't fail if .env doesn't exist)
+-include .env
 
 # Default target
 help:
