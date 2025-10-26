@@ -21,9 +21,6 @@ RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
-# Generate code
-RUN make generate
-
 # Build the application
 RUN make build
 
