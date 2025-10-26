@@ -1,5 +1,8 @@
 .PHONY: help build run test clean generate migrate-up migrate-down swagger sqlc install-tools deps setup docker-up docker-down docker-build
 
+# Load environment variables
+include .env
+
 # Default target
 help:
 	@echo "Available targets:"
@@ -61,11 +64,11 @@ sqlc:
 
 # Run database migrations up
 migrate-up:
-	~/go/bin/goose -dir migrations postgres "postgres://snapdeploy:snapdeploy123@localhost:5433/snapdeploy?sslmode=disable" up
+	~/go/bin/goose -dir migrations postgres $(DB_DSN) up
 
 # Run database migrations down
 migrate-down:
-	~/go/bin/goose -dir migrations postgres "postgres://snapdeploy:snapdeploy123@localhost:5433/snapdeploy?sslmode=disable" down
+	~/go/bin/goose -dir migrations postgres $(DB_DSN) down
 
 # Create a new migration
 migrate-create:
