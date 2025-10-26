@@ -11,12 +11,19 @@ import (
 )
 
 type Querier interface {
+	CountProjectsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountRepositoriesByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountSearchRepositoriesByUserID(ctx context.Context, arg *CountSearchRepositoriesByUserIDParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateProject(ctx context.Context, arg *CreateProjectParams) (*Project, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
+	DeleteProject(ctx context.Context, id uuid.UUID) error
 	DeleteRepository(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	ExistsProjectByRepositoryURL(ctx context.Context, arg *ExistsProjectByRepositoryURLParams) (bool, error)
+	GetProjectByID(ctx context.Context, id uuid.UUID) (*Project, error)
+	GetProjectByRepositoryURL(ctx context.Context, arg *GetProjectByRepositoryURLParams) (*Project, error)
+	GetProjectsByUserID(ctx context.Context, arg *GetProjectsByUserIDParams) ([]*Project, error)
 	GetRepositoriesByUserID(ctx context.Context, arg *GetRepositoriesByUserIDParams) ([]*Repository, error)
 	GetRepositoryByURL(ctx context.Context, url string) (*Repository, error)
 	GetUserByClerkID(ctx context.Context, clerkUserID string) (*User, error)
@@ -24,6 +31,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User, error)
 	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
+	UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)
 	UpsertRepository(ctx context.Context, arg *UpsertRepositoryParams) (*Repository, error)
 }

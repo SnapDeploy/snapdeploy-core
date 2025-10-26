@@ -70,17 +70,20 @@ func main() {
 	// Repository implementations
 	userRepository := persistence.NewUserRepository(db)
 	repositoryRepository := persistence.NewRepositoryRepository(db)
+	projectRepository := persistence.NewProjectRepository(db)
 
 	// Initialize application layer
 	// Application services (use cases)
 	userService := service.NewUserService(userRepository, repositoryRepository, clerkService)
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
+	projectService := service.NewProjectService(projectRepository)
 
 	// Initialize presentation layer
 	// HTTP handlers
 	healthHandler := handlers.NewHealthHandler()
 	userHandler := handlers.NewUserHandler(userService)
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
+	projectHandler := handlers.NewProjectHandler(projectService, userService)
 
 	// Initialize auth middleware
 	authMiddleware, err := middleware.NewAuthMiddleware(cfg)
@@ -134,6 +137,17 @@ func main() {
 		{
 			users.GET("/:id/repos", repositoryHandler.GetUserRepositories)
 			users.POST("/:id/repos/sync", repositoryHandler.SyncRepositories)
+			users.GET("/:id/projects", projectHandler.GetUserProjects)
+			users.POST("/:id/projects", projectHandler.CreateProject)
+		}
+
+		// Project routes
+		projects := v1.Group("/projects")
+		projects.Use(authMiddleware.RequireAuth())
+		{
+			projects.GET("/:id", projectHandler.GetProject)
+			projects.PUT("/:id", projectHandler.UpdateProject)
+			projects.DELETE("/:id", projectHandler.DeleteProject)
 		}
 	}
 
