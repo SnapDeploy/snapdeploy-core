@@ -28,11 +28,9 @@ RUN make build
 FROM alpine:latest
 
 # Install runtime dependencies
-# - git: for cloning repositories
-# - aws-cli: for ECR authentication
+# - aws-cli: for CodeBuild API access
 # - ca-certificates: for HTTPS requests
 RUN apk --no-cache add \
-    git \
     aws-cli \
     ca-certificates
 

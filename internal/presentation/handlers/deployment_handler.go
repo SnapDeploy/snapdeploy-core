@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"snapdeploy-core/internal/domain/deployment"
 	"snapdeploy-core/internal/domain/project"
 	"snapdeploy-core/internal/infrastructure/builder"
+	"snapdeploy-core/internal/infrastructure/codebuild"
 	"snapdeploy-core/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +26,8 @@ import (
 type DeploymentHandler struct {
 	deploymentService *service.DeploymentService
 	userService       *service.UserService
-	builderService    *builder.BuilderService
+	codebuildService  *codebuild.CodeBuildService
+	templateGenerator *builder.TemplateGenerator
 	projectRepo       project.ProjectRepository
 	deploymentRepo    deployment.DeploymentRepository
 }
@@ -40,22 +41,22 @@ type SSEManagerSetter interface {
 func NewDeploymentHandler(
 	deploymentService *service.DeploymentService,
 	userService *service.UserService,
-	builderService *builder.BuilderService,
+	codebuildService *codebuild.CodeBuildService,
+	templateGenerator *builder.TemplateGenerator,
 	projectRepo project.ProjectRepository,
 	deploymentRepo deployment.DeploymentRepository,
 ) *DeploymentHandler {
 	handler := &DeploymentHandler{
 		deploymentService: deploymentService,
 		userService:       userService,
-		builderService:    builderService,
+		codebuildService:  codebuildService,
+		templateGenerator: templateGenerator,
 		projectRepo:       projectRepo,
 		deploymentRepo:    deploymentRepo,
 	}
 
-	// Set SSE manager in builder service
-	if builderService != nil {
-		builderService.SetSSEManager(GetSSEManager())
-	}
+	// Set SSE manager for real-time log streaming
+	codebuildService.SetSSEManager(GetSSEManager())
 
 	return handler
 }
@@ -173,85 +174,42 @@ func (h *DeploymentHandler) buildProcess(deploymentID, projectID string) {
 		return
 	}
 
-	// Clone repository
-	repoPath, err := h.cloneRepository(proj, dep)
+	// Generate Dockerfile
+	dockerfile, err := h.templateGenerator.GenerateDockerfile(proj.Language(), builder.TemplateData{
+		InstallCommand: proj.InstallCommand().String(),
+		BuildCommand:   proj.BuildCommand().String(),
+		RunCommand:     proj.RunCommand().String(),
+		Port:           "8080",
+	})
 	if err != nil {
-		log.Printf("[BUILD] Failed to clone repository: %v", err)
+		log.Printf("[BUILD] Failed to generate Dockerfile: %v", err)
 		dep.UpdateStatus(deployment.StatusFailed)
 		h.deploymentRepo.Save(ctx, dep)
 		return
 	}
-	defer h.cleanupRepository(repoPath)
 
 	// Generate image tag
 	imageTag := h.generateImageTag(proj, dep)
 
-	// Build and deploy
-	buildReq := builder.BuildRequest{
-		Deployment:     dep,
-		Project:        proj,
-		RepositoryPath: repoPath,
-		ImageTag:       imageTag,
+	// Trigger CodeBuild
+	buildReq := codebuild.ServiceBuildRequest{
+		Deployment:    dep,
+		Project:       proj,
+		RepositoryURL: proj.RepositoryURL().String(),
+		Branch:        dep.Branch().String(),
+		CommitHash:    dep.CommitHash().String(),
+		ImageTag:      imageTag,
+		Dockerfile:    dockerfile,
 	}
 
-	log.Printf("[BUILD] Starting build for deployment %s", deploymentID)
-	err = h.builderService.BuildDeployment(ctx, buildReq)
+	log.Printf("[BUILD] Starting CodeBuild for deployment %s", deploymentID)
+	_, err = h.codebuildService.StartBuild(ctx, buildReq)
 	if err != nil {
-		log.Printf("[BUILD] Build failed for deployment %s: %v", deploymentID, err)
-		// Status will be updated by builder service
+		log.Printf("[BUILD] Failed to start CodeBuild: %v", err)
+		// Status will be updated by CodeBuild service
 		return
 	}
-
-	// Cleanup build artifacts
-	if err := h.builderService.CleanupBuildArtifacts(repoPath); err != nil {
-		log.Printf("[BUILD] Warning: failed to cleanup artifacts: %v", err)
-	}
-
-	log.Printf("[BUILD] Completed deployment %s successfully", deploymentID)
-}
-
-// cloneRepository clones a git repository to a temporary directory
-func (h *DeploymentHandler) cloneRepository(proj *project.Project, dep *deployment.Deployment) (string, error) {
-	// Create temporary directory for this build
-	tmpDir, err := os.MkdirTemp("", "snapdeploy-build-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	repoURL := proj.RepositoryURL().String()
-	branch := dep.Branch().String()
-	commitHash := dep.CommitHash().String()
-
-	// Clone the repository
-	cmd := exec.Command("git", "clone", "--depth", "1", "--branch", branch, repoURL, tmpDir)
-	if err := cmd.Run(); err != nil {
-		os.RemoveAll(tmpDir)
-		return "", fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	// Checkout specific commit if provided and not HEAD
-	if commitHash != "" && commitHash != "HEAD" && commitHash != "head" {
-		// Fetch the specific commit
-		cmd = exec.Command("git", "-C", tmpDir, "fetch", "origin", commitHash)
-		if err := cmd.Run(); err != nil {
-			os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to fetch commit: %w", err)
-		}
-
-		// Checkout the commit
-		cmd = exec.Command("git", "-C", tmpDir, "checkout", commitHash)
-		if err := cmd.Run(); err != nil {
-			os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to checkout commit: %w", err)
-		}
-	}
-
-	return tmpDir, nil
-}
-
-// cleanupRepository removes the cloned repository directory
-func (h *DeploymentHandler) cleanupRepository(repoPath string) error {
-	return os.RemoveAll(repoPath)
+	log.Printf("[BUILD] CodeBuild started for deployment %s", deploymentID)
 }
 
 // generateImageTag generates a Docker image tag for the deployment

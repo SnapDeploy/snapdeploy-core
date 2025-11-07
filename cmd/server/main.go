@@ -15,6 +15,7 @@ import (
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/github"
 	"snapdeploy-core/internal/infrastructure/builder"
+	"snapdeploy-core/internal/infrastructure/codebuild"
 	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
 	infraGitHub "snapdeploy-core/internal/infrastructure/github"
 	"snapdeploy-core/internal/infrastructure/persistence"
@@ -84,21 +85,39 @@ func main() {
 	// Initialize presentation layer
 	// HTTP handlers
 	healthHandler := handlers.NewHealthHandler()
-	// Initialize builder service
-	builderService, err := builder.NewBuilderService(
+	
+	// Initialize template generator for Dockerfile generation
+	templateGenerator, err := builder.NewTemplateGenerator()
+	if err != nil {
+		log.Fatalf("Failed to initialize template generator: %v", err)
+	}
+
+	// Initialize CodeBuild service (required)
+	codebuildProjectName := os.Getenv("CODEBUILD_PROJECT_NAME")
+	if codebuildProjectName == "" {
+		log.Fatalf("CODEBUILD_PROJECT_NAME environment variable is required")
+	}
+
+	codebuildService, err := codebuild.NewCodeBuildService(
+		codebuildProjectName,
 		deploymentRepository,
-		"/tmp/snapdeploy/builds",
-		"./temp",
 	)
 	if err != nil {
-		log.Fatalf("Failed to initialize builder service: %v", err)
+		log.Fatalf("Failed to initialize CodeBuild service: %v", err)
 	}
-	defer builderService.Close()
+	log.Printf("CodeBuild service initialized with project: %s", codebuildProjectName)
 
 	userHandler := handlers.NewUserHandler(userService)
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
 	projectHandler := handlers.NewProjectHandler(projectService, userService)
-	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, userService, builderService, projectRepository, deploymentRepository)
+	deploymentHandler := handlers.NewDeploymentHandler(
+		deploymentService, 
+		userService, 
+		codebuildService, 
+		templateGenerator,
+		projectRepository, 
+		deploymentRepository,
+	)
 
 	// Initialize auth middleware
 	authMiddleware, err := middleware.NewAuthMiddleware(cfg)
