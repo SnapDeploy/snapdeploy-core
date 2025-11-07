@@ -128,26 +128,26 @@ phases:
   pre_build:
     commands:
       - echo "Cloning repository..."
-      - git clone --depth 1 --branch $BRANCH $REPOSITORY_URL /tmp/repo
+      - git clone --depth 1 --branch "$BRANCH" "$REPOSITORY_URL" /tmp/repo
       - cd /tmp/repo
       - |
-        if [ "$COMMIT_HASH" != "HEAD" ] && [ "$COMMIT_HASH" != "" ]; then
+        if [ "$COMMIT_HASH" != "HEAD" ] && [ -n "$COMMIT_HASH" ]; then
           echo "Checking out commit $COMMIT_HASH"
-          git fetch origin $COMMIT_HASH
-          git checkout $COMMIT_HASH
+          git fetch origin "$COMMIT_HASH"
+          git checkout "$COMMIT_HASH"
         fi
       - echo "Writing Dockerfile..."
-      - echo "$DOCKERFILE_CONTENT" > Dockerfile.snapdeploy
+      - printf "%s" "$DOCKERFILE_CONTENT" > Dockerfile.snapdeploy
       - echo "Logging in to ECR..."
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$DOCKER_REGISTRY"
   build:
     commands:
-      - echo "Building Docker image: $IMAGE_TAG"
-      - docker build -f Dockerfile.snapdeploy -t $IMAGE_TAG .
+      - echo "Building Docker image - $IMAGE_TAG"
+      - docker build -f Dockerfile.snapdeploy -t "$IMAGE_TAG" .
   post_build:
     commands:
       - echo "Pushing image to ECR..."
-      - docker push $IMAGE_TAG
+      - docker push "$IMAGE_TAG"
       - echo "Build completed successfully!"
 `
 }
