@@ -491,6 +491,454 @@
           }
         }
       }
+    },
+    "/deployments": {
+      "post": {
+        "summary": "Create a new deployment",
+        "description": "Creates a new deployment for a project",
+        "tags": [
+          "Deployments"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeploymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Deployment created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "You don't have permission to create a deployment for this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/deployments/{id}": {
+      "get": {
+        "summary": "Get a deployment by ID",
+        "description": "Returns a single deployment by its ID",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Deployment ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a deployment",
+        "description": "Deletes a deployment",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Deployment ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deployment deleted successfully"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "You don't have permission to delete this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/deployments/{id}/status": {
+      "patch": {
+        "summary": "Update deployment status",
+        "description": "Updates the status of a deployment",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Deployment ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeploymentStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deployment status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "You don't have permission to update this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/deployments/{id}/logs": {
+      "post": {
+        "summary": "Append to deployment logs",
+        "description": "Appends a log line to a deployment",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Deployment ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendDeploymentLogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Log appended successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "You don't have permission to update this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/projects/{id}/deployments": {
+      "get": {
+        "summary": "Get project deployments",
+        "description": "Returns all deployments for a project with pagination",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number (default is 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of items per page (default is 20, max is 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployments retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/projects/{id}/deployments/latest": {
+      "get": {
+        "summary": "Get latest project deployment",
+        "description": "Returns the most recent deployment for a project",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest deployment retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "No deployments found for this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/users/{id}/deployments": {
+      "get": {
+        "summary": "Get user deployments",
+        "description": "Returns all deployments for a user with pagination",
+        "tags": [
+          "Deployments"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number (default is 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of items per page (default is 20, max is 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployments retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -826,6 +1274,141 @@
           }
         }
       },
+      "CreateDeploymentRequest": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "commit_hash",
+          "branch"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project ID to deploy",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "commit_hash": {
+            "type": "string",
+            "description": "Git commit hash to deploy",
+            "example": "abc123def456",
+            "minLength": 7,
+            "maxLength": 40
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch name",
+            "example": "main",
+            "maxLength": 255
+          }
+        }
+      },
+      "UpdateDeploymentStatusRequest": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "New deployment status",
+            "enum": [
+              "PENDING",
+              "BUILDING",
+              "DEPLOYING",
+              "DEPLOYED",
+              "FAILED",
+              "ROLLED_BACK"
+            ],
+            "example": "BUILDING"
+          }
+        }
+      },
+      "AppendDeploymentLogRequest": {
+        "type": "object",
+        "required": [
+          "log_line"
+        ],
+        "properties": {
+          "log_line": {
+            "type": "string",
+            "description": "Log line to append",
+            "example": "Building Docker image..."
+          }
+        }
+      },
+      "Deployment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deployment unique identifier"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project ID this deployment belongs to"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who created the deployment"
+          },
+          "commit_hash": {
+            "type": "string",
+            "description": "Git commit hash",
+            "example": "abc123def456"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch name",
+            "example": "main"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current deployment status",
+            "enum": [
+              "PENDING",
+              "BUILDING",
+              "DEPLOYING",
+              "DEPLOYED",
+              "FAILED",
+              "ROLLED_BACK"
+            ],
+            "example": "DEPLOYED"
+          },
+          "logs": {
+            "type": "string",
+            "description": "Deployment logs",
+            "example": "Starting build process...\nBuilding Docker image...\nDeployment completed successfully!"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Deployment creation timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Deployment last update timestamp"
+          }
+        }
+      },
+      "DeploymentListResponse": {
+        "type": "object",
+        "properties": {
+          "deployments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Deployment"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -905,6 +1488,10 @@
     {
       "name": "Projects",
       "description": "Project management and deployment configuration"
+    },
+    {
+      "name": "Deployments",
+      "description": "Deployment management and monitoring"
     }
   ]
 }

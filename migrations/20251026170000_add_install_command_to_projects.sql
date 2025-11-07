@@ -15,3 +15,4 @@ ALTER TABLE projects
 DROP COLUMN install_command;
 
 -- +goose StatementEnd
+

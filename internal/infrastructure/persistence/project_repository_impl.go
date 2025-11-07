@@ -168,12 +168,18 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 
 	var createdAt, updatedAt = dbProject.CreatedAt.Time, dbProject.UpdatedAt.Time
 
+	// Handle nullable build_command
+	buildCommand := dbProject.BuildCommand
+	if buildCommand == "" {
+		buildCommand = "" // Empty string is fine for optional command
+	}
+
 	return project.Reconstitute(
 		dbProject.ID.String(),
 		userID,
 		dbProject.RepositoryUrl,
 		dbProject.InstallCommand,
-		dbProject.BuildCommand,
+		buildCommand,
 		dbProject.RunCommand,
 		dbProject.Language,
 		createdAt,

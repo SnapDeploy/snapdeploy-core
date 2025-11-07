@@ -1,0 +1,51 @@
+FROM node:18-alpine AS deps
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN {{.InstallCommand}}
+
+# Builder stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Set environment to production
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+{{if .BuildCommand}}
+# Build Next.js application
+RUN {{.BuildCommand}}
+{{end}}
+
+# Production stage
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy built artifacts
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE {{.Port}}
+
+ENV PORT={{.Port}}
+ENV HOSTNAME="0.0.0.0"
+
+CMD {{.RunCommand}}
+

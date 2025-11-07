@@ -122,6 +122,23 @@ func NewCommand(cmd string) (Command, error) {
 	return Command{value: cmd}, nil
 }
 
+// NewOptionalCommand creates a new Command that allows empty strings (for optional commands like build)
+func NewOptionalCommand(cmd string) Command {
+	cmd = strings.TrimSpace(cmd)
+
+	if len(cmd) > 500 {
+		// Truncate if too long (shouldn't happen, but handle gracefully)
+		cmd = cmd[:500]
+	}
+
+	return Command{value: cmd}
+}
+
+// IsEmpty checks if the command is empty
+func (c Command) IsEmpty() bool {
+	return c.value == ""
+}
+
 func (c Command) String() string {
 	return c.value
 }

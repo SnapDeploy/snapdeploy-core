@@ -4,7 +4,7 @@ package dto
 type CreateProjectRequest struct {
 	RepositoryURL  string `json:"repository_url" binding:"required"`
 	InstallCommand string `json:"install_command" binding:"required"`
-	BuildCommand   string `json:"build_command" binding:"required"`
+	BuildCommand   string `json:"build_command"` // Optional
 	RunCommand     string `json:"run_command" binding:"required"`
 	Language       string `json:"language" binding:"required"`
 }
@@ -13,7 +13,7 @@ type CreateProjectRequest struct {
 type UpdateProjectRequest struct {
 	RepositoryURL  string `json:"repository_url" binding:"required"`
 	InstallCommand string `json:"install_command" binding:"required"`
-	BuildCommand   string `json:"build_command" binding:"required"`
+	BuildCommand   string `json:"build_command"` // Optional
 	RunCommand     string `json:"run_command" binding:"required"`
 	Language       string `json:"language" binding:"required"`
 }

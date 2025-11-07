@@ -10,6 +10,18 @@ import (
 	"github.com/google/uuid"
 )
 
+type Deployment struct {
+	ID         uuid.UUID      `json:"id"`
+	ProjectID  uuid.UUID      `json:"project_id"`
+	UserID     uuid.UUID      `json:"user_id"`
+	CommitHash string         `json:"commit_hash"`
+	Branch     string         `json:"branch"`
+	Status     string         `json:"status"`
+	Logs       sql.NullString `json:"logs"`
+	CreatedAt  sql.NullTime   `json:"created_at"`
+	UpdatedAt  sql.NullTime   `json:"updated_at"`
+}
+
 type Project struct {
 	ID             uuid.UUID    `json:"id"`
 	UserID         uuid.UUID    `json:"user_id"`

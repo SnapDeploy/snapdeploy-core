@@ -11,16 +11,24 @@ import (
 )
 
 type Querier interface {
+	CountDeploymentsByProjectID(ctx context.Context, projectID uuid.UUID) (int64, error)
+	CountDeploymentsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountProjectsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountRepositoriesByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountSearchRepositoriesByUserID(ctx context.Context, arg *CountSearchRepositoriesByUserIDParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateDeployment(ctx context.Context, arg *CreateDeploymentParams) (*Deployment, error)
 	CreateProject(ctx context.Context, arg *CreateProjectParams) (*Project, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
+	DeleteDeployment(ctx context.Context, id uuid.UUID) error
 	DeleteProject(ctx context.Context, id uuid.UUID) error
 	DeleteRepository(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	ExistsProjectByRepositoryURL(ctx context.Context, arg *ExistsProjectByRepositoryURLParams) (bool, error)
+	GetDeploymentByID(ctx context.Context, id uuid.UUID) (*Deployment, error)
+	GetDeploymentsByProjectID(ctx context.Context, arg *GetDeploymentsByProjectIDParams) ([]*Deployment, error)
+	GetDeploymentsByUserID(ctx context.Context, arg *GetDeploymentsByUserIDParams) ([]*Deployment, error)
+	GetLatestDeploymentByProjectID(ctx context.Context, projectID uuid.UUID) (*Deployment, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (*Project, error)
 	GetProjectByRepositoryURL(ctx context.Context, arg *GetProjectByRepositoryURLParams) (*Project, error)
 	GetProjectsByUserID(ctx context.Context, arg *GetProjectsByUserIDParams) ([]*Project, error)
@@ -31,6 +39,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User, error)
 	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
+	UpdateDeployment(ctx context.Context, arg *UpdateDeploymentParams) error
 	UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)
 	UpsertRepository(ctx context.Context, arg *UpsertRepositoryParams) (*Repository, error)

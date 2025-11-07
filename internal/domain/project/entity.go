@@ -35,10 +35,8 @@ func NewProject(
 		return nil, fmt.Errorf("invalid install command: %w", err)
 	}
 
-	buildCmd, err := NewCommand(buildCommand)
-	if err != nil {
-		return nil, fmt.Errorf("invalid build command: %w", err)
-	}
+	// Build command is optional
+	buildCmd := NewOptionalCommand(buildCommand)
 
 	runCmd, err := NewCommand(runCommand)
 	if err != nil {
@@ -86,10 +84,8 @@ func Reconstitute(
 		return nil, fmt.Errorf("invalid install command: %w", err)
 	}
 
-	buildCmd, err := NewCommand(buildCommand)
-	if err != nil {
-		return nil, fmt.Errorf("invalid build command: %w", err)
-	}
+	// Build command is optional
+	buildCmd := NewOptionalCommand(buildCommand)
 
 	runCmd, err := NewCommand(runCommand)
 	if err != nil {
@@ -128,10 +124,8 @@ func (p *Project) Update(
 		return fmt.Errorf("invalid install command: %w", err)
 	}
 
-	buildCmd, err := NewCommand(buildCommand)
-	if err != nil {
-		return fmt.Errorf("invalid build command: %w", err)
-	}
+	// Build command is optional
+	buildCmd := NewOptionalCommand(buildCommand)
 
 	runCmd, err := NewCommand(runCommand)
 	if err != nil {

@@ -85,6 +85,9 @@ func (s *ProjectService) GetProjectByID(ctx context.Context, projectID string) (
 
 // GetProjectsByUserID retrieves all projects for a user with pagination
 func (s *ProjectService) GetProjectsByUserID(ctx context.Context, userID string, page, limit int32) (*dto.ProjectListResponse, error) {
+	fmt.Printf("[PERF] GetProjectsByUserID called for user: %s\n", userID)
+	startTime := time.Now()
+
 	if page < 1 {
 		page = 1
 	}
@@ -99,12 +102,18 @@ func (s *ProjectService) GetProjectsByUserID(ctx context.Context, userID string,
 
 	offset := (page - 1) * limit
 
+	fmt.Printf("[PERF] Fetching projects from DB...\n")
+	dbStart := time.Now()
 	projects, err := s.projectRepo.FindByUserID(ctx, uid, limit, offset)
+	fmt.Printf("[PERF] FindByUserID took: %v\n", time.Since(dbStart))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch projects: %w", err)
 	}
 
+	fmt.Printf("[PERF] Counting projects...\n")
+	countStart := time.Now()
 	total, err := s.projectRepo.CountByUserID(ctx, uid)
+	fmt.Printf("[PERF] CountByUserID took: %v\n", time.Since(countStart))
 	if err != nil {
 		return nil, fmt.Errorf("failed to count projects: %w", err)
 	}
@@ -116,7 +125,7 @@ func (s *ProjectService) GetProjectsByUserID(ctx context.Context, userID string,
 
 	totalPages := (total + int64(limit) - 1) / int64(limit)
 
-	return &dto.ProjectListResponse{
+	result := &dto.ProjectListResponse{
 		Projects: projectResponses,
 		Pagination: dto.PaginationResponse{
 			Page:       page,
@@ -124,7 +133,10 @@ func (s *ProjectService) GetProjectsByUserID(ctx context.Context, userID string,
 			Total:      total,
 			TotalPages: totalPages,
 		},
-	}, nil
+	}
+
+	fmt.Printf("[PERF] GetProjectsByUserID total time: %v\n", time.Since(startTime))
+	return result, nil
 }
 
 // UpdateProject updates an existing project

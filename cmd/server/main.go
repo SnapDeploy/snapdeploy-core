@@ -14,6 +14,7 @@ import (
 	"snapdeploy-core/internal/config"
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/github"
+	"snapdeploy-core/internal/infrastructure/builder"
 	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
 	infraGitHub "snapdeploy-core/internal/infrastructure/github"
 	"snapdeploy-core/internal/infrastructure/persistence"
@@ -71,19 +72,33 @@ func main() {
 	userRepository := persistence.NewUserRepository(db)
 	repositoryRepository := persistence.NewRepositoryRepository(db)
 	projectRepository := persistence.NewProjectRepository(db)
+	deploymentRepository := persistence.NewDeploymentRepository(db)
 
 	// Initialize application layer
 	// Application services (use cases)
 	userService := service.NewUserService(userRepository, repositoryRepository, clerkService)
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
 	projectService := service.NewProjectService(projectRepository)
+	deploymentService := service.NewDeploymentService(deploymentRepository, projectRepository)
 
 	// Initialize presentation layer
 	// HTTP handlers
 	healthHandler := handlers.NewHealthHandler()
+	// Initialize builder service
+	builderService, err := builder.NewBuilderService(
+		deploymentRepository,
+		"/tmp/snapdeploy/builds",
+		"./temp",
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize builder service: %v", err)
+	}
+	defer builderService.Close()
+
 	userHandler := handlers.NewUserHandler(userService)
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
 	projectHandler := handlers.NewProjectHandler(projectService, userService)
+	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, userService, builderService, projectRepository, deploymentRepository)
 
 	// Initialize auth middleware
 	authMiddleware, err := middleware.NewAuthMiddleware(cfg)
@@ -121,6 +136,12 @@ func main() {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
+		// Debug logging middleware
+		v1.Use(func(c *gin.Context) {
+			log.Printf("[ROUTE DEBUG] %s %s", c.Request.Method, c.Request.URL.Path)
+			c.Next()
+		})
+
 		// Health check endpoint (no auth required)
 		v1.GET("/health", healthHandler.Health)
 
@@ -148,7 +169,33 @@ func main() {
 			projects.GET("/:id", projectHandler.GetProject)
 			projects.PUT("/:id", projectHandler.UpdateProject)
 			projects.DELETE("/:id", projectHandler.DeleteProject)
+			projects.GET("/:id/deployments", deploymentHandler.GetProjectDeployments)
+			projects.GET("/:id/deployments/latest", deploymentHandler.GetLatestProjectDeployment)
 		}
+
+		// Deployment routes
+		deployments := v1.Group("/deployments")
+		{
+			// SSE endpoint - NO AUTH for now (outside middleware)
+			deployments.GET("/:id/logs/stream", func(c *gin.Context) {
+				log.Printf("[SSE] Endpoint hit directly - no auth middleware")
+				deploymentHandler.StreamDeploymentLogs(c)
+			})
+
+			// Protected routes
+			protectedDeployments := deployments.Group("")
+			protectedDeployments.Use(authMiddleware.RequireAuth())
+			{
+				protectedDeployments.POST("", deploymentHandler.CreateDeployment)
+				protectedDeployments.GET("/:id", deploymentHandler.GetDeployment)
+				protectedDeployments.PATCH("/:id/status", deploymentHandler.UpdateDeploymentStatus)
+				protectedDeployments.POST("/:id/logs", deploymentHandler.AppendDeploymentLog)
+				protectedDeployments.DELETE("/:id", deploymentHandler.DeleteDeployment)
+			}
+		}
+
+		// User deployment routes
+		users.GET("/:id/deployments", deploymentHandler.GetUserDeployments)
 	}
 
 	// Swagger documentation
