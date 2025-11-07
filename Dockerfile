@@ -27,8 +27,14 @@ RUN make build
 # Final stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+# Install runtime dependencies
+# - git: for cloning repositories
+# - aws-cli: for ECR authentication
+# - ca-certificates: for HTTPS requests
+RUN apk --no-cache add \
+    git \
+    aws-cli \
+    ca-certificates
 
 # Create non-root user
 RUN adduser -D -s /bin/sh appuser
