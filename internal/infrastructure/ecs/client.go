@@ -3,11 +3,13 @@ package ecs
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 )
@@ -79,7 +81,14 @@ func (c *ECSClient) DeployService(ctx context.Context, req DeploymentRequest) er
 func (c *ECSClient) createTaskDefinition(ctx context.Context, req DeploymentRequest) (string, error) {
 	region := os.Getenv("AWS_REGION")
 	accountID := os.Getenv("AWS_ACCOUNT_ID")
-	
+
+	// Create CloudWatch log group if it doesn't exist
+	logGroupName := fmt.Sprintf("/ecs/%s", req.ServiceName)
+	if err := c.ensureLogGroupExists(ctx, logGroupName, region); err != nil {
+		log.Printf("[ECS] Warning: failed to create log group %s: %v", logGroupName, err)
+		// Don't fail the deployment, just log the warning
+	}
+
 	// Build environment variables
 	envVars := []types.KeyValuePair{}
 	for key, value := range req.EnvVars {
@@ -114,11 +123,14 @@ func (c *ECSClient) createTaskDefinition(ctx context.Context, req DeploymentRequ
 		},
 	}
 
-	// Get execution role ARN
-	executionRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s-ecs-task-execution-role", 
-		accountID, req.ServiceName)
-	taskRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s-ecs-task-role", 
-		accountID, req.ServiceName)
+	// Get shared user deployment role ARNs from environment
+	// These roles are shared across all user deployments for security and simplicity
+	taskRoleArn := os.Getenv("USER_DEPLOYMENT_TASK_ROLE_ARN")
+	executionRoleArn := os.Getenv("USER_DEPLOYMENT_EXECUTION_ROLE_ARN")
+
+	if taskRoleArn == "" || executionRoleArn == "" {
+		return "", fmt.Errorf("USER_DEPLOYMENT_TASK_ROLE_ARN and USER_DEPLOYMENT_EXECUTION_ROLE_ARN environment variables must be set")
+	}
 
 	// Register task definition
 	input := &ecs.RegisterTaskDefinitionInput{
@@ -208,7 +220,7 @@ func (c *ECSClient) getService(ctx context.Context, serviceName string) (*types.
 	}
 
 	service := &result.Services[0]
-	
+
 	// Check if service is inactive (deleted)
 	if service.Status != nil && *service.Status == "INACTIVE" {
 		return nil, fmt.Errorf("service not found")
@@ -220,7 +232,7 @@ func (c *ECSClient) getService(ctx context.Context, serviceName string) (*types.
 // WaitForServiceStable waits for the service to reach a stable state
 func (c *ECSClient) WaitForServiceStable(ctx context.Context, serviceName string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	
+
 	for time.Now().Before(deadline) {
 		service, err := c.getService(ctx, serviceName)
 		if err != nil {
@@ -277,3 +289,32 @@ func isServiceNotFoundError(err error) bool {
 	return err.Error() == "service not found"
 }
 
+// ensureLogGroupExists creates a CloudWatch log group if it doesn't already exist
+func (c *ECSClient) ensureLogGroupExists(ctx context.Context, logGroupName, region string) error {
+	// Create CloudWatch Logs client
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	logsClient := cloudwatchlogs.NewFromConfig(cfg)
+
+	// Try to create the log group
+	_, err = logsClient.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
+		LogGroupName: aws.String(logGroupName),
+	})
+
+	if err != nil {
+		// Check if it's because the log group already exists
+		if err.Error() != "" && (err.Error() == "ResourceAlreadyExistsException" ||
+			err.Error() == "The specified log group already exists") {
+			// Log group already exists, this is fine
+			log.Printf("[ECS] Log group %s already exists", logGroupName)
+			return nil
+		}
+		return fmt.Errorf("failed to create log group: %w", err)
+	}
+
+	log.Printf("[ECS] Created CloudWatch log group: %s", logGroupName)
+	return nil
+}
