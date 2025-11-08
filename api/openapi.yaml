@@ -789,6 +789,14 @@ components:
           description: Programming language or framework
           enum: [NODE, NODE_TS, NEXTJS, GO, PYTHON]
           example: "NODE_TS"
+        custom_domain:
+          type: string
+          description: Custom subdomain prefix (e.g., "my-app" becomes "my-app.snapdeploy.app"). Leave empty to auto-generate.
+          example: "my-app"
+          pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+          minLength: 1
+          maxLength: 63
+          nullable: true
 
     UpdateProjectRequest:
       type: object
@@ -820,6 +828,14 @@ components:
           description: Programming language or framework
           enum: [NODE, NODE_TS, NEXTJS, GO, PYTHON]
           example: "NODE_TS"
+        custom_domain:
+          type: string
+          description: Custom subdomain prefix (e.g., "my-app" becomes "my-app.snapdeploy.app"). Leave empty to auto-generate.
+          example: "my-app"
+          pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+          minLength: 1
+          maxLength: 63
+          nullable: true
 
     Project:
       type: object
@@ -853,6 +869,15 @@ components:
           description: Programming language or framework
           enum: [NODE, NODE_TS, NEXTJS, GO, PYTHON]
           example: "NODE_TS"
+        custom_domain:
+          type: string
+          description: Custom subdomain prefix for the project
+          example: "my-app"
+        deployment_url:
+          type: string
+          description: Full deployment URL for the project
+          example: "https://my-app.snapdeploy.app"
+          format: uri
         created_at:
           type: string
           format: date-time
