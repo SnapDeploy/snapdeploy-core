@@ -3,6 +3,7 @@ package alb
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
@@ -62,8 +63,33 @@ func (c *ALBClient) CreateTargetGroupAndRule(ctx context.Context, serviceName, c
 	return targetGroupArn, nil
 }
 
-// createTargetGroup creates a target group for a service
+// createTargetGroup creates or updates a target group for a service
 func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string, port int32) (string, error) {
+	// Check if target group already exists
+	existingGroups, err := c.findTargetGroupsByName(ctx, serviceName)
+	if err != nil {
+		return "", fmt.Errorf("failed to check existing target groups: %w", err)
+	}
+
+	// If target group exists, check if port matches
+	if len(existingGroups) > 0 {
+		existingTG := existingGroups[0]
+		existingPort := aws.ToInt32(existingTG.Port)
+
+		if existingPort == port {
+			// Port matches, reuse existing target group
+			log.Printf("[ALB] Reusing existing target group %s with port %d", serviceName, port)
+			return *existingTG.TargetGroupArn, nil
+		}
+
+		// Port doesn't match, delete old target group and create new one
+		log.Printf("[ALB] Target group %s exists with port %d, but need port %d. Deleting old target group...", serviceName, existingPort, port)
+		if err := c.deleteTargetGroup(ctx, *existingTG.TargetGroupArn); err != nil {
+			return "", fmt.Errorf("failed to delete old target group: %w", err)
+		}
+	}
+
+	// Create new target group
 	input := &elasticloadbalancingv2.CreateTargetGroupInput{
 		Name:                       aws.String(serviceName),
 		Protocol:                   types.ProtocolEnumHttp,
@@ -91,17 +117,51 @@ func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string, p
 		return "", fmt.Errorf("no target group created")
 	}
 
+	log.Printf("[ALB] Created new target group %s with port %d", serviceName, port)
 	return *result.TargetGroups[0].TargetGroupArn, nil
 }
 
-// createListenerRule creates an ALB listener rule for host-based routing
+// createListenerRule creates or updates an ALB listener rule for host-based routing
 func (c *ALBClient) createListenerRule(ctx context.Context, hostHeader, targetGroupArn, serviceName string) error {
+	// Check if a rule already exists for this service
+	existingRules, err := c.findRulesByServiceName(ctx, serviceName)
+	if err != nil {
+		return fmt.Errorf("failed to check existing rules: %w", err)
+	}
+
+	// If rule exists, update it to point to the new target group
+	if len(existingRules) > 0 {
+		for _, rule := range existingRules {
+			if rule.RuleArn != nil {
+				// Update existing rule to point to new target group
+				modifyInput := &elasticloadbalancingv2.ModifyRuleInput{
+					RuleArn: rule.RuleArn,
+					Actions: []types.Action{
+						{
+							Type:           types.ActionTypeEnumForward,
+							TargetGroupArn: aws.String(targetGroupArn),
+						},
+					},
+				}
+
+				_, err := c.client.ModifyRule(ctx, modifyInput)
+				if err != nil {
+					return fmt.Errorf("failed to update listener rule: %w", err)
+				}
+
+				log.Printf("[ALB] Updated existing listener rule for %s", serviceName)
+				return nil
+			}
+		}
+	}
+
 	// Find the next available priority
 	priority, err := c.findNextPriority(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to find available priority: %w", err)
 	}
 
+	// Create new rule
 	input := &elasticloadbalancingv2.CreateRuleInput{
 		ListenerArn: aws.String(c.listenerArn),
 		Priority:    aws.Int32(priority),
@@ -136,6 +196,7 @@ func (c *ALBClient) createListenerRule(ctx context.Context, hostHeader, targetGr
 		return fmt.Errorf("failed to create listener rule: %w", err)
 	}
 
+	log.Printf("[ALB] Created new listener rule for %s", serviceName)
 	return nil
 }
 
