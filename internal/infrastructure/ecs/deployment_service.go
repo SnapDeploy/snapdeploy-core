@@ -11,6 +11,7 @@ import (
 	"snapdeploy-core/internal/domain/deployment"
 	"snapdeploy-core/internal/domain/project"
 	"snapdeploy-core/internal/infrastructure/alb"
+	"snapdeploy-core/internal/infrastructure/database"
 	"snapdeploy-core/internal/infrastructure/route53"
 )
 
@@ -21,6 +22,9 @@ type DeploymentOrchestrator struct {
 	route53Client   *route53.Route53Client
 	deploymentRepo  deployment.DeploymentRepository
 	envVarRepo      project.EnvironmentVariableRepository
+	dbManager       *database.PostgresManager
+	taskRunner      *TaskRunner
+	clusterName     string
 	albDNS          string
 	baseDomain      string
 	subnetIDs       []string
@@ -47,7 +51,19 @@ func NewDeploymentOrchestrator(
 		return nil, fmt.Errorf("failed to create Route53 client: %w", err)
 	}
 
+	// Create database manager (may fail if RDS env vars not set, which is OK)
+	dbManager, err := database.NewPostgresManager()
+	if err != nil {
+		log.Printf("[ECS] Warning: Could not initialize database manager: %v", err)
+		log.Printf("[ECS] Database features will be unavailable")
+		// Don't fail - database is optional
+	}
+
 	// Get infrastructure configuration from environment
+	clusterName := os.Getenv("ECS_CLUSTER_NAME")
+	if clusterName == "" {
+		clusterName = "snapdeploy-dev-cluster" // default
+	}
 	albDNS := os.Getenv("ALB_DNS_NAME")
 	baseDomain := os.Getenv("BASE_DOMAIN")
 	if baseDomain == "" {
@@ -60,12 +76,18 @@ func NewDeploymentOrchestrator(
 		return nil, fmt.Errorf("missing required environment variables (ALB_DNS_NAME, SUBNET_IDS, SECURITY_GROUP_ID)")
 	}
 
+	// Create task runner for running one-off tasks (migrations)
+	taskRunner := NewTaskRunner(ecsClient.client, clusterName, subnetIDs, securityGroupID)
+
 	return &DeploymentOrchestrator{
 		ecsClient:       ecsClient,
 		albClient:       albClient,
 		route53Client:   route53Client,
 		deploymentRepo:  deploymentRepo,
 		envVarRepo:      envVarRepo,
+		dbManager:       dbManager,
+		taskRunner:      taskRunner,
+		clusterName:     clusterName,
 		albDNS:          albDNS,
 		baseDomain:      baseDomain,
 		subnetIDs:       subnetIDs,
@@ -134,6 +156,61 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		dep.AppendLog("ℹ️  No custom environment variables (using defaults)")
 	}
 	o.deploymentRepo.Save(ctx, dep)
+
+	// Handle database creation if required
+	if proj.RequireDB() {
+		if o.dbManager == nil {
+			dep.AppendLog("❌ Database required but database manager not available")
+			dep.UpdateStatus(deployment.StatusFailed)
+			o.deploymentRepo.Save(ctx, dep)
+			return fmt.Errorf("database required but database manager not initialized")
+		}
+
+		dep.AppendLog("🗄️  Database required - creating fresh database...")
+		o.deploymentRepo.Save(ctx, dep)
+
+		// Generate database name from project ID
+		dbName := database.GetDatabaseName(proj.ID().String())
+
+		// Create/reset database (drops if exists, then creates fresh)
+		if err := o.dbManager.CreateDatabase(ctx, dbName); err != nil {
+			dep.AppendLog(fmt.Sprintf("❌ Failed to create database: %v", err))
+			dep.UpdateStatus(deployment.StatusFailed)
+			o.deploymentRepo.Save(ctx, dep)
+			return fmt.Errorf("failed to create database: %w", err)
+		}
+
+		// Get database URL and add to environment variables
+		databaseURL := o.dbManager.GetDatabaseURL(dbName)
+		projectEnvVars["DATABASE_URL"] = databaseURL
+
+		dep.AppendLog(fmt.Sprintf("✅ Database created: %s", dbName))
+		o.deploymentRepo.Save(ctx, dep)
+
+		// Run migrations if migration command is specified
+		if !proj.MigrationCommand().IsEmpty() {
+			dep.AppendLog(fmt.Sprintf("🔄 Running database migrations: %s", proj.MigrationCommand().String()))
+			o.deploymentRepo.Save(ctx, dep)
+
+			// We need to register a task definition first to run the migration
+			// This is a temporary task definition just for the migration
+			migrationTaskDef := fmt.Sprintf("%s-migration", serviceName)
+
+			// The migration will use the same image that we're about to deploy
+			// and will have access to DATABASE_URL
+			err := o.runMigration(ctx, dep, migrationTaskDef, serviceName, imageURI, proj.MigrationCommand().String(), projectEnvVars)
+			if err != nil {
+				dep.AppendLog(fmt.Sprintf("❌ Migration failed: %v", err))
+				dep.UpdateStatus(deployment.StatusFailed)
+				o.deploymentRepo.Save(ctx, dep)
+				// Database stays created but migrations failed - user can retry
+				return fmt.Errorf("migration failed: %w", err)
+			}
+
+			dep.AppendLog("✅ Database migrations completed successfully")
+			o.deploymentRepo.Save(ctx, dep)
+		}
+	}
 
 	// Determine container port (from PORT env var if set, otherwise default 8080)
 	containerPort := int32(8080)
@@ -237,6 +314,58 @@ func (o *DeploymentOrchestrator) DeployToECS(
 	o.deploymentRepo.Save(ctx, dep)
 
 	log.Printf("[ECS] Deployment completed successfully for project %s", proj.ID().String())
+	return nil
+}
+
+// runMigration runs database migrations as a one-off ECS task
+func (o *DeploymentOrchestrator) runMigration(
+	ctx context.Context,
+	dep *deployment.Deployment,
+	taskDefFamily string,
+	serviceName string,
+	imageURI string,
+	migrationCommand string,
+	envVars map[string]string,
+) error {
+	log.Printf("[ECS] Running migration task for service %s", serviceName)
+
+	// Parse migration command (e.g., "npm run migrate" -> ["npm", "run", "migrate"])
+	commandParts := strings.Fields(migrationCommand)
+	if len(commandParts) == 0 {
+		return fmt.Errorf("invalid migration command: empty")
+	}
+
+	// Register a task definition for the migration
+	// Use the same configuration as the main service, but with migration command
+	taskDefArn, err := o.ecsClient.createTaskDefinition(ctx, DeploymentRequest{
+		ServiceName:   serviceName,
+		ImageURI:      imageURI,
+		ProjectID:     serviceName, // Not used in task def
+		CustomDomain:  serviceName, // Not used in task def
+		CPU:           "256",
+		Memory:        "512",
+		ContainerPort: 8080, // Not used for migration task
+		EnvVars:       envVars,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to register migration task definition: %w", err)
+	}
+
+	dep.AppendLog(fmt.Sprintf("📝 Registered migration task definition: %s", taskDefArn))
+	o.deploymentRepo.Save(ctx, dep)
+
+	// Run the migration task
+	err = o.taskRunner.RunTask(ctx, RunTaskRequest{
+		TaskDefinition: taskDefArn,
+		Command:        commandParts,
+		EnvVars:        envVars,
+		TaskName:       serviceName,
+	})
+
+	if err != nil {
+		return fmt.Errorf("migration task failed: %w", err)
+	}
+
 	return nil
 }
 

@@ -21,3 +21,4 @@ ALTER COLUMN build_command SET NOT NULL;
 
 -- +goose StatementEnd
 
+

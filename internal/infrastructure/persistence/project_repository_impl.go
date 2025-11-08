@@ -37,14 +37,20 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			String: proj.BuildCommand().String(),
 			Valid:  !proj.BuildCommand().IsEmpty(),
 		}
+		migrationCmd := sql.NullString{
+			String: proj.MigrationCommand().String(),
+			Valid:  !proj.MigrationCommand().IsEmpty(),
+		}
 		_, err := queries.UpdateProject(ctx, &database.UpdateProjectParams{
-			ID:             proj.ID().UUID(),
-			RepositoryUrl:  proj.RepositoryURL().String(),
-			InstallCommand: proj.InstallCommand().String(),
-			BuildCommand:   buildCmd,
-			RunCommand:     proj.RunCommand().String(),
-			Language:       proj.Language().String(),
-			CustomDomain:   proj.CustomDomain().String(),
+			ID:               proj.ID().UUID(),
+			RepositoryUrl:    proj.RepositoryURL().String(),
+			InstallCommand:   proj.InstallCommand().String(),
+			BuildCommand:     buildCmd,
+			RunCommand:       proj.RunCommand().String(),
+			Language:         proj.Language().String(),
+			CustomDomain:     proj.CustomDomain().String(),
+			RequireDb:        proj.RequireDB(),
+			MigrationCommand: migrationCmd,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
@@ -55,14 +61,20 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			String: proj.BuildCommand().String(),
 			Valid:  !proj.BuildCommand().IsEmpty(),
 		}
+		migrationCmd := sql.NullString{
+			String: proj.MigrationCommand().String(),
+			Valid:  !proj.MigrationCommand().IsEmpty(),
+		}
 		_, err := queries.CreateProject(ctx, &database.CreateProjectParams{
-			UserID:         proj.UserID().UUID(),
-			RepositoryUrl:  proj.RepositoryURL().String(),
-			InstallCommand: proj.InstallCommand().String(),
-			BuildCommand:   buildCmd,
-			RunCommand:     proj.RunCommand().String(),
-			Language:       proj.Language().String(),
-			CustomDomain:   proj.CustomDomain().String(),
+			UserID:           proj.UserID().UUID(),
+			RepositoryUrl:    proj.RepositoryURL().String(),
+			InstallCommand:   proj.InstallCommand().String(),
+			BuildCommand:     buildCmd,
+			RunCommand:       proj.RunCommand().String(),
+			Language:         proj.Language().String(),
+			CustomDomain:     proj.CustomDomain().String(),
+			RequireDb:        proj.RequireDB(),
+			MigrationCommand: migrationCmd,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
@@ -184,6 +196,12 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		buildCommand = dbProject.BuildCommand.String
 	}
 
+	// Handle nullable migration_command
+	migrationCommand := ""
+	if dbProject.MigrationCommand.Valid {
+		migrationCommand = dbProject.MigrationCommand.String
+	}
+
 	proj, err := project.Reconstitute(
 		dbProject.ID.String(),
 		userID,
@@ -193,6 +211,8 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		dbProject.RunCommand,
 		dbProject.Language,
 		dbProject.CustomDomain,
+		dbProject.RequireDb,
+		migrationCommand,
 		createdAt,
 		updatedAt,
 	)
@@ -211,14 +231,20 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 				String: proj.BuildCommand().String(),
 				Valid:  !proj.BuildCommand().IsEmpty(),
 			}
+			migrationCmd := sql.NullString{
+				String: proj.MigrationCommand().String(),
+				Valid:  !proj.MigrationCommand().IsEmpty(),
+			}
 			queries.UpdateProject(ctx, &database.UpdateProjectParams{
-				ID:             proj.ID().UUID(),
-				RepositoryUrl:  proj.RepositoryURL().String(),
-				InstallCommand: proj.InstallCommand().String(),
-				BuildCommand:   buildCmd,
-				RunCommand:     proj.RunCommand().String(),
-				Language:       proj.Language().String(),
-				CustomDomain:   proj.CustomDomain().String(),
+				ID:               proj.ID().UUID(),
+				RepositoryUrl:    proj.RepositoryURL().String(),
+				InstallCommand:   proj.InstallCommand().String(),
+				BuildCommand:     buildCmd,
+				RunCommand:       proj.RunCommand().String(),
+				Language:         proj.Language().String(),
+				CustomDomain:     proj.CustomDomain().String(),
+				RequireDb:        proj.RequireDB(),
+				MigrationCommand: migrationCmd,
 			})
 		}()
 	}

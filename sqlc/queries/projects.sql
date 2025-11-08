@@ -24,9 +24,11 @@ INSERT INTO projects (
     build_command,
     run_command,
     language,
-    custom_domain
+    custom_domain,
+    require_db,
+    migration_command
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
 RETURNING *;
 
@@ -39,6 +41,8 @@ SET
     run_command = $5,
     language = $6,
     custom_domain = $7,
+    require_db = $8,
+    migration_command = $9,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;

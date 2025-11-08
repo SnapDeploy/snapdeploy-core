@@ -35,6 +35,10 @@ type Project struct {
 	InstallCommand string         `json:"install_command"`
 	// Custom subdomain prefix for the project (e.g., "my-app" becomes "my-app.snapdeploy.app")
 	CustomDomain string `json:"custom_domain"`
+	// Whether this project requires a dedicated PostgreSQL database
+	RequireDb bool `json:"require_db"`
+	// Optional command to run database migrations (e.g., "npm run migrate")
+	MigrationCommand sql.NullString `json:"migration_command"`
 }
 
 // Stores encrypted environment variables for projects

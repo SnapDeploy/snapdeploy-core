@@ -16,3 +16,4 @@ DROP COLUMN install_command;
 
 -- +goose StatementEnd
 
+

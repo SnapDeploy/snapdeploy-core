@@ -32,21 +32,25 @@ INSERT INTO projects (
     build_command,
     run_command,
     language,
-    custom_domain
+    custom_domain,
+    require_db,
+    migration_command
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain
+RETURNING id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command
 `
 
 type CreateProjectParams struct {
-	UserID         uuid.UUID      `json:"user_id"`
-	RepositoryUrl  string         `json:"repository_url"`
-	InstallCommand string         `json:"install_command"`
-	BuildCommand   sql.NullString `json:"build_command"`
-	RunCommand     string         `json:"run_command"`
-	Language       string         `json:"language"`
-	CustomDomain   string         `json:"custom_domain"`
+	UserID           uuid.UUID      `json:"user_id"`
+	RepositoryUrl    string         `json:"repository_url"`
+	InstallCommand   string         `json:"install_command"`
+	BuildCommand     sql.NullString `json:"build_command"`
+	RunCommand       string         `json:"run_command"`
+	Language         string         `json:"language"`
+	CustomDomain     string         `json:"custom_domain"`
+	RequireDb        bool           `json:"require_db"`
+	MigrationCommand sql.NullString `json:"migration_command"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg *CreateProjectParams) (*Project, error) {
@@ -58,6 +62,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg *CreateProjectParams) (
 		arg.RunCommand,
 		arg.Language,
 		arg.CustomDomain,
+		arg.RequireDb,
+		arg.MigrationCommand,
 	)
 	var i Project
 	err := row.Scan(
@@ -71,6 +77,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg *CreateProjectParams) (
 		&i.UpdatedAt,
 		&i.InstallCommand,
 		&i.CustomDomain,
+		&i.RequireDb,
+		&i.MigrationCommand,
 	)
 	return &i, err
 }
@@ -119,7 +127,7 @@ func (q *Queries) ExistsProjectByRepositoryURL(ctx context.Context, arg *ExistsP
 }
 
 const GetProjectByCustomDomain = `-- name: GetProjectByCustomDomain :one
-SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain FROM projects
+SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command FROM projects
 WHERE custom_domain = $1 AND custom_domain != ''
 `
 
@@ -137,12 +145,14 @@ func (q *Queries) GetProjectByCustomDomain(ctx context.Context, customDomain str
 		&i.UpdatedAt,
 		&i.InstallCommand,
 		&i.CustomDomain,
+		&i.RequireDb,
+		&i.MigrationCommand,
 	)
 	return &i, err
 }
 
 const GetProjectByID = `-- name: GetProjectByID :one
-SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain FROM projects
+SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command FROM projects
 WHERE id = $1
 `
 
@@ -160,12 +170,14 @@ func (q *Queries) GetProjectByID(ctx context.Context, id uuid.UUID) (*Project, e
 		&i.UpdatedAt,
 		&i.InstallCommand,
 		&i.CustomDomain,
+		&i.RequireDb,
+		&i.MigrationCommand,
 	)
 	return &i, err
 }
 
 const GetProjectByRepositoryURL = `-- name: GetProjectByRepositoryURL :one
-SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain FROM projects
+SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command FROM projects
 WHERE user_id = $1 AND repository_url = $2
 `
 
@@ -188,12 +200,14 @@ func (q *Queries) GetProjectByRepositoryURL(ctx context.Context, arg *GetProject
 		&i.UpdatedAt,
 		&i.InstallCommand,
 		&i.CustomDomain,
+		&i.RequireDb,
+		&i.MigrationCommand,
 	)
 	return &i, err
 }
 
 const GetProjectsByUserID = `-- name: GetProjectsByUserID :many
-SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain FROM projects
+SELECT id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command FROM projects
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -225,6 +239,8 @@ func (q *Queries) GetProjectsByUserID(ctx context.Context, arg *GetProjectsByUse
 			&i.UpdatedAt,
 			&i.InstallCommand,
 			&i.CustomDomain,
+			&i.RequireDb,
+			&i.MigrationCommand,
 		); err != nil {
 			return nil, err
 		}
@@ -248,19 +264,23 @@ SET
     run_command = $5,
     language = $6,
     custom_domain = $7,
+    require_db = $8,
+    migration_command = $9,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain
+RETURNING id, user_id, repository_url, build_command, run_command, language, created_at, updated_at, install_command, custom_domain, require_db, migration_command
 `
 
 type UpdateProjectParams struct {
-	ID             uuid.UUID      `json:"id"`
-	RepositoryUrl  string         `json:"repository_url"`
-	InstallCommand string         `json:"install_command"`
-	BuildCommand   sql.NullString `json:"build_command"`
-	RunCommand     string         `json:"run_command"`
-	Language       string         `json:"language"`
-	CustomDomain   string         `json:"custom_domain"`
+	ID               uuid.UUID      `json:"id"`
+	RepositoryUrl    string         `json:"repository_url"`
+	InstallCommand   string         `json:"install_command"`
+	BuildCommand     sql.NullString `json:"build_command"`
+	RunCommand       string         `json:"run_command"`
+	Language         string         `json:"language"`
+	CustomDomain     string         `json:"custom_domain"`
+	RequireDb        bool           `json:"require_db"`
+	MigrationCommand sql.NullString `json:"migration_command"`
 }
 
 func (q *Queries) UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error) {
@@ -272,6 +292,8 @@ func (q *Queries) UpdateProject(ctx context.Context, arg *UpdateProjectParams) (
 		arg.RunCommand,
 		arg.Language,
 		arg.CustomDomain,
+		arg.RequireDb,
+		arg.MigrationCommand,
 	)
 	var i Project
 	err := row.Scan(
@@ -285,6 +307,8 @@ func (q *Queries) UpdateProject(ctx context.Context, arg *UpdateProjectParams) (
 		&i.UpdatedAt,
 		&i.InstallCommand,
 		&i.CustomDomain,
+		&i.RequireDb,
+		&i.MigrationCommand,
 	)
 	return &i, err
 }

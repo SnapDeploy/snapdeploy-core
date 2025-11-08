@@ -907,6 +907,16 @@ components:
           minLength: 1
           maxLength: 63
           nullable: true
+        require_db:
+          type: boolean
+          description: Whether this project requires a dedicated PostgreSQL database. If true, a fresh database will be created on each deployment.
+          example: false
+          default: false
+        migration_command:
+          type: string
+          description: Optional command to run database migrations (e.g., "npm run migrate", "python manage.py migrate"). Only used if require_db is true.
+          example: "npm run migrate"
+          nullable: true
 
     UpdateProjectRequest:
       type: object
@@ -945,6 +955,16 @@ components:
           pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
           minLength: 1
           maxLength: 63
+          nullable: true
+        require_db:
+          type: boolean
+          description: Whether this project requires a dedicated PostgreSQL database. If true, a fresh database will be created on each deployment.
+          example: false
+          default: false
+        migration_command:
+          type: string
+          description: Optional command to run database migrations (e.g., "npm run migrate", "python manage.py migrate"). Only used if require_db is true.
+          example: "npm run migrate"
           nullable: true
 
     Project:
@@ -988,6 +1008,21 @@ components:
           description: Full deployment URL for the project
           example: "https://my-app.snapdeploy.app"
           format: uri
+        require_db:
+          type: boolean
+          description: Whether this project has a dedicated PostgreSQL database
+          example: false
+        migration_command:
+          type: string
+          description: Database migration command (if configured)
+          example: "npm run migrate"
+          nullable: true
+        database_url:
+          type: string
+          description: PostgreSQL connection string (only present if require_db is true)
+          example: "postgresql://user:pass@host:5432/proj_abc123?sslmode=require"
+          format: uri
+          nullable: true
         created_at:
           type: string
           format: date-time
