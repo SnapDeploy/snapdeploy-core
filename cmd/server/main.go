@@ -17,6 +17,7 @@ import (
 	"snapdeploy-core/internal/infrastructure/builder"
 	"snapdeploy-core/internal/infrastructure/codebuild"
 	"snapdeploy-core/internal/infrastructure/ecs"
+	"snapdeploy-core/internal/infrastructure/encryption"
 	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
 	infraGitHub "snapdeploy-core/internal/infrastructure/github"
 	"snapdeploy-core/internal/infrastructure/persistence"
@@ -70,11 +71,19 @@ func main() {
 	clerkService := infraClerk.NewClerkService(clerkClient)
 	githubService := infraGitHub.NewGitHubService(githubClient)
 
+	// Initialize encryption service
+	encryptionService, err := encryption.NewEncryptionService()
+	if err != nil {
+		log.Fatalf("Failed to initialize encryption service: %v", err)
+	}
+	log.Printf("Encryption service initialized")
+
 	// Repository implementations
 	userRepository := persistence.NewUserRepository(db)
 	repositoryRepository := persistence.NewRepositoryRepository(db)
 	projectRepository := persistence.NewProjectRepository(db)
 	deploymentRepository := persistence.NewDeploymentRepository(db)
+	envVarRepository := persistence.NewEnvVarRepository(db, encryptionService)
 
 	// Initialize application layer
 	// Application services (use cases)
@@ -82,6 +91,7 @@ func main() {
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
 	projectService := service.NewProjectService(projectRepository)
 	deploymentService := service.NewDeploymentService(deploymentRepository, projectRepository)
+	envVarService := service.NewEnvVarService(envVarRepository, projectRepository, encryptionService)
 
 	// Initialize presentation layer
 	// HTTP handlers
@@ -109,7 +119,7 @@ func main() {
 	log.Printf("CodeBuild service initialized with project: %s", codebuildProjectName)
 
 	// Initialize ECS deployment orchestrator (optional - only if deploying to ECS)
-	ecsOrchestrator, err := ecs.NewDeploymentOrchestrator(deploymentRepository)
+	ecsOrchestrator, err := ecs.NewDeploymentOrchestrator(deploymentRepository, envVarRepository)
 	if err != nil {
 		log.Printf("Warning: ECS deployment orchestrator not initialized: %v", err)
 		log.Printf("Deployments will only build images without deploying to ECS")
@@ -123,6 +133,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
 	projectHandler := handlers.NewProjectHandler(projectService, userService)
+	envVarHandler := handlers.NewEnvVarHandler(envVarService, userService)
 	deploymentHandler := handlers.NewDeploymentHandler(
 		deploymentService, 
 		userService, 
@@ -203,6 +214,10 @@ func main() {
 			projects.DELETE("/:id", projectHandler.DeleteProject)
 			projects.GET("/:id/deployments", deploymentHandler.GetProjectDeployments)
 			projects.GET("/:id/deployments/latest", deploymentHandler.GetLatestProjectDeployment)
+			// Environment variables
+			projects.GET("/:id/env", envVarHandler.GetProjectEnvVars)
+			projects.POST("/:id/env", envVarHandler.CreateOrUpdateEnvVar)
+			projects.DELETE("/:id/env/:key", envVarHandler.DeleteEnvVar)
 		}
 
 		// Deployment routes

@@ -6,6 +6,7 @@ package database
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -34,6 +35,17 @@ type Project struct {
 	InstallCommand string         `json:"install_command"`
 	// Custom subdomain prefix for the project (e.g., "my-app" becomes "my-app.snapdeploy.app")
 	CustomDomain string `json:"custom_domain"`
+}
+
+// Stores encrypted environment variables for projects
+type ProjectEnvironmentVariable struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Key       string    `json:"key"`
+	// Encrypted environment variable value (AES-256-GCM)
+	Value     string    `json:"value"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Repository struct {

@@ -44,9 +44,9 @@ func NewALBClient() (*ALBClient, error) {
 }
 
 // CreateTargetGroupAndRule creates a target group and listener rule for a deployment
-func (c *ALBClient) CreateTargetGroupAndRule(ctx context.Context, serviceName, customDomain, baseDomain string) (string, error) {
+func (c *ALBClient) CreateTargetGroupAndRule(ctx context.Context, serviceName, customDomain, baseDomain string, containerPort int32) (string, error) {
 	// Create target group
-	targetGroupArn, err := c.createTargetGroup(ctx, serviceName)
+	targetGroupArn, err := c.createTargetGroup(ctx, serviceName, containerPort)
 	if err != nil {
 		return "", fmt.Errorf("failed to create target group: %w", err)
 	}
@@ -63,11 +63,11 @@ func (c *ALBClient) CreateTargetGroupAndRule(ctx context.Context, serviceName, c
 }
 
 // createTargetGroup creates a target group for a service
-func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string) (string, error) {
+func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string, port int32) (string, error) {
 	input := &elasticloadbalancingv2.CreateTargetGroupInput{
 		Name:                       aws.String(serviceName),
 		Protocol:                   types.ProtocolEnumHttp,
-		Port:                       aws.Int32(8080),
+		Port:                       aws.Int32(port),
 		VpcId:                      aws.String(c.vpcID),
 		TargetType:                 types.TargetTypeEnumIp,
 		HealthCheckEnabled:         aws.Bool(true),

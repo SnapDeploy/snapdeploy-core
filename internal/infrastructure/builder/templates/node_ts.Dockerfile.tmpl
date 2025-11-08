@@ -31,6 +31,9 @@ RUN npm ci --only=production
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
 
+# Set PORT environment variable
+ENV PORT={{.Port}}
+
 # Expose port
 EXPOSE {{.Port}}
 

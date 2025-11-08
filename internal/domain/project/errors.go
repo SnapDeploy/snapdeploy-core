@@ -11,4 +11,7 @@ var (
 
 	// ErrUnauthorized is returned when a user tries to access a project they don't own
 	ErrUnauthorized = errors.New("unauthorized to access this project")
+
+	// ErrEnvVarNotFound is returned when an environment variable is not found
+	ErrEnvVarNotFound = errors.New("environment variable not found")
 )

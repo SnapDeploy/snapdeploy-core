@@ -13,15 +13,19 @@ import (
 type Querier interface {
 	CountDeploymentsByProjectID(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountDeploymentsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountProjectEnvVars(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountProjectsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountRepositoriesByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountSearchRepositoriesByUserID(ctx context.Context, arg *CountSearchRepositoriesByUserIDParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateDeployment(ctx context.Context, arg *CreateDeploymentParams) (*Deployment, error)
 	CreateProject(ctx context.Context, arg *CreateProjectParams) (*Project, error)
+	CreateProjectEnvVar(ctx context.Context, arg *CreateProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
+	DeleteAllProjectEnvVars(ctx context.Context, projectID uuid.UUID) error
 	DeleteDeployment(ctx context.Context, id uuid.UUID) error
 	DeleteProject(ctx context.Context, id uuid.UUID) error
+	DeleteProjectEnvVar(ctx context.Context, arg *DeleteProjectEnvVarParams) error
 	DeleteRepository(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	ExistsProjectByCustomDomain(ctx context.Context, customDomain string) (bool, error)
@@ -33,6 +37,8 @@ type Querier interface {
 	GetProjectByCustomDomain(ctx context.Context, customDomain string) (*Project, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (*Project, error)
 	GetProjectByRepositoryURL(ctx context.Context, arg *GetProjectByRepositoryURLParams) (*Project, error)
+	GetProjectEnvVar(ctx context.Context, arg *GetProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
+	GetProjectEnvVars(ctx context.Context, projectID uuid.UUID) ([]*ProjectEnvironmentVariable, error)
 	GetProjectsByUserID(ctx context.Context, arg *GetProjectsByUserIDParams) ([]*Project, error)
 	GetRepositoriesByUserID(ctx context.Context, arg *GetRepositoriesByUserIDParams) ([]*Repository, error)
 	GetRepositoryByURL(ctx context.Context, url string) (*Repository, error)
@@ -43,6 +49,7 @@ type Querier interface {
 	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
 	UpdateDeployment(ctx context.Context, arg *UpdateDeploymentParams) error
 	UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error)
+	UpdateProjectEnvVar(ctx context.Context, arg *UpdateProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)
 	UpsertRepository(ctx context.Context, arg *UpsertRepositoryParams) (*Repository, error)
 }

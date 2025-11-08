@@ -329,6 +329,116 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /projects/{id}/env:
+    get:
+      summary: Get project environment variables
+      description: Returns all environment variables for a project (values are masked for security)
+      tags:
+        - Environment Variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Environment variables retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvVarListResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: You don't have permission to access this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      summary: Create or update an environment variable
+      description: Creates a new environment variable or updates an existing one for a project
+      tags:
+        - Environment Variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEnvVarRequest"
+      responses:
+        "200":
+          description: Environment variable created/updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvVarResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: You don't have permission to modify this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /projects/{id}/env/{key}:
+    delete:
+      summary: Delete an environment variable
+      description: Deletes an environment variable from a project
+      tags:
+        - Environment Variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            format: uuid
+        - name: key
+          in: path
+          required: true
+          description: Environment variable key
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Environment variable deleted successfully
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: You don't have permission to modify this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
   /deployments:
     post:
       summary: Create a new deployment
@@ -993,6 +1103,65 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+    CreateEnvVarRequest:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          description: Environment variable key (e.g., "DATABASE_URL", "API_KEY")
+          example: "DATABASE_URL"
+          pattern: "^[A-Z_][A-Z0-9_]*$"
+          minLength: 1
+          maxLength: 255
+        value:
+          type: string
+          description: Environment variable value (will be encrypted server-side)
+          example: "postgresql://localhost:5432/mydb"
+          minLength: 1
+
+    EnvVarResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Environment variable unique identifier
+        project_id:
+          type: string
+          format: uuid
+          description: Project ID this environment variable belongs to
+        key:
+          type: string
+          description: Environment variable key
+          example: "DATABASE_URL"
+        value:
+          type: string
+          description: Masked value for security (e.g., "p*******b")
+          example: "p*******b"
+        created_at:
+          type: string
+          format: date-time
+          description: Environment variable creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Environment variable last update timestamp
+
+    EnvVarListResponse:
+      type: object
+      properties:
+        environment_variables:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvVarResponse"
+        count:
+          type: integer
+          description: Total number of environment variables
+          example: 5
+
     Error:
       type: object
       properties:
@@ -1044,5 +1213,7 @@ tags:
     description: Repository management and search
   - name: Projects
     description: Project management and deployment configuration
+  - name: Environment Variables
+    description: Environment variable management for projects (encrypted and secure)
   - name: Deployments
     description: Deployment management and monitoring

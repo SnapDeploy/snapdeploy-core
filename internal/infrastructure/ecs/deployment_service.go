@@ -20,6 +20,7 @@ type DeploymentOrchestrator struct {
 	albClient       *alb.ALBClient
 	route53Client   *route53.Route53Client
 	deploymentRepo  deployment.DeploymentRepository
+	envVarRepo      project.EnvironmentVariableRepository
 	albDNS          string
 	baseDomain      string
 	subnetIDs       []string
@@ -29,6 +30,7 @@ type DeploymentOrchestrator struct {
 // NewDeploymentOrchestrator creates a new deployment orchestrator
 func NewDeploymentOrchestrator(
 	deploymentRepo deployment.DeploymentRepository,
+	envVarRepo project.EnvironmentVariableRepository,
 ) (*DeploymentOrchestrator, error) {
 	ecsClient, err := NewECSClient()
 	if err != nil {
@@ -63,6 +65,7 @@ func NewDeploymentOrchestrator(
 		albClient:       albClient,
 		route53Client:   route53Client,
 		deploymentRepo:  deploymentRepo,
+		envVarRepo:      envVarRepo,
 		albDNS:          albDNS,
 		baseDomain:      baseDomain,
 		subnetIDs:       subnetIDs,
@@ -97,7 +100,52 @@ func (o *DeploymentOrchestrator) DeployToECS(
 	dep.AppendLog(fmt.Sprintf("🖼️  Image: %s", imageURI))
 	o.deploymentRepo.Save(ctx, dep)
 
-	// Create ALB target group and listener rule for this deployment
+	// Load and decrypt project environment variables FIRST
+	dep.AppendLog("🔐 Loading environment variables...")
+	o.deploymentRepo.Save(ctx, dep)
+
+	// Default system env vars
+	projectEnvVars := map[string]string{
+		"PROJECT_ID": proj.ID().String(),
+		"LANGUAGE":   proj.Language().String(),
+		"PORT":       "8080", // Default port, can be overridden by user
+	}
+
+	// Get decrypted user env vars from repository
+	userEnvCount := 0
+	if envVarRepoImpl, ok := o.envVarRepo.(interface {
+		DecryptAll(ctx context.Context, projectID project.ProjectID) (map[string]string, error)
+	}); ok {
+		userEnvVars, err := envVarRepoImpl.DecryptAll(ctx, proj.ID())
+		if err != nil {
+			dep.AppendLog(fmt.Sprintf("⚠️  Warning: Could not load env vars: %v", err))
+		} else if len(userEnvVars) > 0 {
+			// Merge user env vars (they override defaults including PORT)
+			for k, v := range userEnvVars {
+				projectEnvVars[k] = v
+			}
+			userEnvCount = len(userEnvVars)
+		}
+	}
+
+	if userEnvCount > 0 {
+		dep.AppendLog(fmt.Sprintf("✅ Loaded %d custom environment variables", userEnvCount))
+	} else {
+		dep.AppendLog("ℹ️  No custom environment variables (using defaults)")
+	}
+	o.deploymentRepo.Save(ctx, dep)
+
+	// Determine container port (from PORT env var if set, otherwise default 8080)
+	containerPort := int32(8080)
+	if portStr, ok := projectEnvVars["PORT"]; ok {
+		if port, err := parsePort(portStr); err == nil {
+			containerPort = port
+			dep.AppendLog(fmt.Sprintf("🔌 Using custom PORT: %d", containerPort))
+			o.deploymentRepo.Save(ctx, dep)
+		}
+	}
+
+	// Create ALB target group and listener rule with the correct port
 	dep.AppendLog("🔧 Creating ALB target group and routing rule...")
 	o.deploymentRepo.Save(ctx, dep)
 
@@ -106,6 +154,7 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		serviceName,
 		proj.CustomDomain().String(),
 		o.baseDomain,
+		containerPort,
 	)
 	if err != nil {
 		dep.AppendLog(fmt.Sprintf("❌ Failed to create ALB routing: %v", err))
@@ -126,15 +175,11 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		CPU:             "256", // 0.25 vCPU
 		Memory:          "512", // 512 MB
 		DesiredCount:    1,
-		ContainerPort:   8080,
+		ContainerPort:   containerPort,
 		TargetGroupArn:  targetGroupArn,
 		SubnetIDs:       o.subnetIDs,
 		SecurityGroupID: o.securityGroupID,
-		EnvVars: map[string]string{
-			"PROJECT_ID": proj.ID().String(),
-			"LANGUAGE":   proj.Language().String(),
-			"PORT":       "8080",
-		},
+		EnvVars:         projectEnvVars,
 	}
 
 	// Deploy to ECS
@@ -234,4 +279,17 @@ func generateServiceName(projectID string) string {
 		shortID = projectID[:8]
 	}
 	return fmt.Sprintf("snapdeploy-%s", shortID)
+}
+
+// parsePort parses a port string to int32
+func parsePort(portStr string) (int32, error) {
+	var port int
+	_, err := fmt.Sscanf(portStr, "%d", &port)
+	if err != nil {
+		return 0, err
+	}
+	if port < 1 || port > 65535 {
+		return 0, fmt.Errorf("port must be between 1 and 65535")
+	}
+	return int32(port), nil
 }
