@@ -33,11 +33,15 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 	// If no error, project exists - update it
 	if err == nil {
 		// Update existing project
+		buildCmd := sql.NullString{
+			String: proj.BuildCommand().String(),
+			Valid:  !proj.BuildCommand().IsEmpty(),
+		}
 		_, err := queries.UpdateProject(ctx, &database.UpdateProjectParams{
 			ID:             proj.ID().UUID(),
 			RepositoryUrl:  proj.RepositoryURL().String(),
 			InstallCommand: proj.InstallCommand().String(),
-			BuildCommand:   proj.BuildCommand().String(),
+			BuildCommand:   buildCmd,
 			RunCommand:     proj.RunCommand().String(),
 			Language:       proj.Language().String(),
 			CustomDomain:   proj.CustomDomain().String(),
@@ -47,11 +51,15 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 		}
 	} else {
 		// Project doesn't exist (err == sql.ErrNoRows) - create it
+		buildCmd := sql.NullString{
+			String: proj.BuildCommand().String(),
+			Valid:  !proj.BuildCommand().IsEmpty(),
+		}
 		_, err := queries.CreateProject(ctx, &database.CreateProjectParams{
 			UserID:         proj.UserID().UUID(),
 			RepositoryUrl:  proj.RepositoryURL().String(),
 			InstallCommand: proj.InstallCommand().String(),
-			BuildCommand:   proj.BuildCommand().String(),
+			BuildCommand:   buildCmd,
 			RunCommand:     proj.RunCommand().String(),
 			Language:       proj.Language().String(),
 			CustomDomain:   proj.CustomDomain().String(),
@@ -171,9 +179,9 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 	var createdAt, updatedAt = dbProject.CreatedAt.Time, dbProject.UpdatedAt.Time
 
 	// Handle nullable build_command
-	buildCommand := dbProject.BuildCommand
-	if buildCommand == "" {
-		buildCommand = "" // Empty string is fine for optional command
+	buildCommand := ""
+	if dbProject.BuildCommand.Valid {
+		buildCommand = dbProject.BuildCommand.String
 	}
 
 	return project.Reconstitute(

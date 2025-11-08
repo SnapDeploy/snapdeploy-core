@@ -101,7 +101,7 @@ func (c *Route53Client) createAliasChange(fullDomain, albDNS string) types.Chang
 			AliasTarget: &types.AliasTarget{
 				DNSName:              aws.String(albDNS),
 				HostedZoneId:         aws.String(albHostedZoneID),
-				EvaluateTargetHealth: aws.Bool(true),
+				EvaluateTargetHealth: true,
 			},
 		},
 	}
@@ -158,7 +158,7 @@ func (c *Route53Client) DeleteRecord(ctx context.Context, subdomain, recordType 
 		return fmt.Errorf("record not found")
 	}
 
-	recordSet := listResult.ResourceRecordSets[0]
+	recordSet := &listResult.ResourceRecordSets[0]
 
 	// Delete the record
 	change := types.Change{

@@ -176,11 +176,11 @@ func (c *ECSClient) createService(ctx context.Context, req DeploymentRequest, ta
 // updateService updates an existing ECS service with a new task definition
 func (c *ECSClient) updateService(ctx context.Context, serviceName, taskDefArn string, desiredCount int32) error {
 	input := &ecs.UpdateServiceInput{
-		Service:        aws.String(serviceName),
-		Cluster:        aws.String(c.clusterName),
-		TaskDefinition: aws.String(taskDefArn),
-		DesiredCount:   aws.Int32(desiredCount),
-		ForceNewDeployment: aws.Bool(true),
+		Service:            aws.String(serviceName),
+		Cluster:            aws.String(c.clusterName),
+		TaskDefinition:     aws.String(taskDefArn),
+		DesiredCount:       aws.Int32(desiredCount),
+		ForceNewDeployment: true,
 	}
 
 	_, err := c.client.UpdateService(ctx, input)
