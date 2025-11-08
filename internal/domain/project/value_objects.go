@@ -193,14 +193,16 @@ func NewCustomDomain(domain string) (CustomDomain, error) {
 	return CustomDomain{value: domain}, nil
 }
 
-// NewCustomDomainFromExisting creates a CustomDomain from an existing value (skips generation)
+// NewCustomDomainFromExisting creates a CustomDomain from an existing value
+// If the domain is empty (legacy projects), generates a new one
 func NewCustomDomainFromExisting(domain string) (CustomDomain, error) {
 	domain = strings.ToLower(strings.TrimSpace(domain))
-	
+
+	// If empty (legacy projects before custom domain feature), generate one
 	if domain == "" {
-		return CustomDomain{}, fmt.Errorf("custom domain cannot be empty when reconstituting")
+		domain = generateRandomSubdomain()
 	}
-	
+
 	return CustomDomain{value: domain}, nil
 }
 

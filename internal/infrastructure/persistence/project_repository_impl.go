@@ -184,7 +184,7 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		buildCommand = dbProject.BuildCommand.String
 	}
 
-	return project.Reconstitute(
+	proj, err := project.Reconstitute(
 		dbProject.ID.String(),
 		userID,
 		dbProject.RepositoryUrl,
@@ -196,4 +196,32 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		createdAt,
 		updatedAt,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	// If custom domain was empty and got auto-generated, save it back to DB
+	// This handles legacy projects that were created before the custom_domain feature
+	if dbProject.CustomDomain == "" && !proj.CustomDomain().IsEmpty() {
+		// Update the database asynchronously to set the generated domain
+		go func() {
+			ctx := context.Background()
+			queries := database.New(r.db.GetConnection())
+			buildCmd := sql.NullString{
+				String: proj.BuildCommand().String(),
+				Valid:  !proj.BuildCommand().IsEmpty(),
+			}
+			queries.UpdateProject(ctx, &database.UpdateProjectParams{
+				ID:             proj.ID().UUID(),
+				RepositoryUrl:  proj.RepositoryURL().String(),
+				InstallCommand: proj.InstallCommand().String(),
+				BuildCommand:   buildCmd,
+				RunCommand:     proj.RunCommand().String(),
+				Language:       proj.Language().String(),
+				CustomDomain:   proj.CustomDomain().String(),
+			})
+		}()
+	}
+
+	return proj, nil
 }
