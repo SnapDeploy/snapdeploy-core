@@ -82,11 +82,34 @@ func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string, p
 			return *existingTG.TargetGroupArn, nil
 		}
 
-		// Port doesn't match, delete old target group and create new one
-		log.Printf("[ALB] Target group %s exists with port %d, but need port %d. Deleting old target group...", serviceName, existingPort, port)
+		// Port doesn't match, need to recreate with new port
+		// IMPORTANT: Must delete listener rules FIRST, then target group
+		log.Printf("[ALB] Target group %s exists with port %d, but need port %d. Recreating...", serviceName, existingPort, port)
+
+		// Step 1: Delete all listener rules using this target group
+		log.Printf("[ALB] Deleting listener rules for %s...", serviceName)
+		rules, err := c.findRulesByServiceName(ctx, serviceName)
+		if err != nil {
+			return "", fmt.Errorf("failed to find listener rules: %w", err)
+		}
+
+		for _, rule := range rules {
+			isDefault := rule.IsDefault != nil && *rule.IsDefault
+			if rule.RuleArn != nil && !isDefault {
+				if err := c.deleteListenerRule(ctx, *rule.RuleArn); err != nil {
+					log.Printf("[ALB] Warning: failed to delete listener rule: %v", err)
+				} else {
+					log.Printf("[ALB] Deleted listener rule: %s", *rule.RuleArn)
+				}
+			}
+		}
+
+		// Step 2: Now delete the target group
+		log.Printf("[ALB] Deleting old target group %s...", serviceName)
 		if err := c.deleteTargetGroup(ctx, *existingTG.TargetGroupArn); err != nil {
 			return "", fmt.Errorf("failed to delete old target group: %w", err)
 		}
+		log.Printf("[ALB] Successfully deleted old target group")
 	}
 
 	// Create new target group
