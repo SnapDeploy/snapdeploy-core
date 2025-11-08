@@ -112,6 +112,7 @@ func main() {
 	codebuildService, err := codebuild.NewCodeBuildService(
 		codebuildProjectName,
 		deploymentRepository,
+		projectRepository,
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize CodeBuild service: %v", err)

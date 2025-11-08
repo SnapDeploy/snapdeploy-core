@@ -23,16 +23,18 @@ type DeploymentCallback interface {
 type CodeBuildService struct {
 	client            *CodeBuildClient
 	deploymentRepo    deployment.DeploymentRepository
+	projectRepo       project.ProjectRepository
 	sseManager        SSEBroadcaster
 	deploymentCallback DeploymentCallback
 	currentImageTag   string       // Store image tag for callback
-	currentProject    *project.Project // Store project for callback
+	currentProjectID  project.ProjectID // Store project ID to fetch fresh data on deployment
 }
 
 // NewCodeBuildService creates a new CodeBuild service
 func NewCodeBuildService(
 	projectName string,
 	deploymentRepo deployment.DeploymentRepository,
+	projectRepo project.ProjectRepository,
 ) (*CodeBuildService, error) {
 	client, err := NewCodeBuildClient(projectName)
 	if err != nil {
@@ -40,8 +42,9 @@ func NewCodeBuildService(
 	}
 
 	return &CodeBuildService{
-		client:        client,
+		client:         client,
 		deploymentRepo: deploymentRepo,
+		projectRepo:    projectRepo,
 	}, nil
 }
 
@@ -109,9 +112,11 @@ func (s *CodeBuildService) StartBuild(ctx context.Context, req ServiceBuildReque
 	s.logAndUpdate(ctx, dep, fmt.Sprintf("CodeBuild build started: %s", buildID))
 	s.logAndUpdate(ctx, dep, "Build is running in isolated environment...")
 
-	// Store image tag and project for deployment callback
+	// Store image tag and project ID for deployment callback
+	// We store only the ID and fetch fresh project data when deploying
+	// This ensures we always use the latest project configuration (e.g., updated custom_domain)
 	s.currentImageTag = req.ImageTag
-	s.currentProject = proj
+	s.currentProjectID = proj.ID()
 
 	// Start monitoring build status in background
 	go s.monitorBuild(ctx, dep, buildID)
@@ -136,12 +141,22 @@ func (s *CodeBuildService) monitorBuild(ctx context.Context, dep *deployment.Dep
 		s.logAndUpdate(ctx, dep, "✅ Build completed successfully!")
 		s.logAndUpdate(ctx, dep, "📦 Image pushed to registry successfully")
 		
+		// Fetch fresh project data to ensure we have the latest configuration
+		// This is critical for picking up changes like updated custom_domain
+		proj, err := s.projectRepo.FindByID(ctx, s.currentProjectID)
+		if err != nil {
+			s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Failed to fetch project data: %v", err))
+			dep.UpdateStatus(deployment.StatusFailed)
+			s.deploymentRepo.Save(ctx, dep)
+			return
+		}
+		
 		// Trigger ECS deployment if callback is set
-		if s.deploymentCallback != nil && s.currentProject != nil {
+		if s.deploymentCallback != nil {
 			s.logAndUpdate(ctx, dep, "🚀 Triggering deployment to ECS...")
 			s.deploymentRepo.Save(ctx, dep)
 			
-			if err := s.deploymentCallback.OnBuildSuccess(ctx, dep, s.currentProject, s.currentImageTag); err != nil {
+			if err := s.deploymentCallback.OnBuildSuccess(ctx, dep, proj, s.currentImageTag); err != nil {
 				s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Deployment to ECS failed: %v", err))
 				dep.UpdateStatus(deployment.StatusFailed)
 			}
