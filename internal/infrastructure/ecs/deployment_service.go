@@ -10,17 +10,19 @@ import (
 
 	"snapdeploy-core/internal/domain/deployment"
 	"snapdeploy-core/internal/domain/project"
+	"snapdeploy-core/internal/infrastructure/alb"
 	"snapdeploy-core/internal/infrastructure/route53"
 )
 
 // DeploymentOrchestrator orchestrates the full deployment process
 type DeploymentOrchestrator struct {
-	ecsClient      *ECSClient
-	route53Client  *route53.Route53Client
-	deploymentRepo deployment.DeploymentRepository
-	albDNS         string
-	targetGroupArn string
-	subnetIDs      []string
+	ecsClient       *ECSClient
+	albClient       *alb.ALBClient
+	route53Client   *route53.Route53Client
+	deploymentRepo  deployment.DeploymentRepository
+	albDNS          string
+	baseDomain      string
+	subnetIDs       []string
 	securityGroupID string
 }
 
@@ -33,6 +35,11 @@ func NewDeploymentOrchestrator(
 		return nil, fmt.Errorf("failed to create ECS client: %w", err)
 	}
 
+	albClient, err := alb.NewALBClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ALB client: %w", err)
+	}
+
 	route53Client, err := route53.NewRoute53Client()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Route53 client: %w", err)
@@ -40,20 +47,24 @@ func NewDeploymentOrchestrator(
 
 	// Get infrastructure configuration from environment
 	albDNS := os.Getenv("ALB_DNS_NAME")
-	targetGroupArn := os.Getenv("TARGET_GROUP_ARN")
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		baseDomain = "snap-deploy.com"
+	}
 	subnetIDs := strings.Split(os.Getenv("SUBNET_IDS"), ",")
 	securityGroupID := os.Getenv("SECURITY_GROUP_ID")
 
-	if albDNS == "" || targetGroupArn == "" || len(subnetIDs) == 0 || securityGroupID == "" {
-		return nil, fmt.Errorf("missing required environment variables (ALB_DNS_NAME, TARGET_GROUP_ARN, SUBNET_IDS, SECURITY_GROUP_ID)")
+	if albDNS == "" || len(subnetIDs) == 0 || securityGroupID == "" {
+		return nil, fmt.Errorf("missing required environment variables (ALB_DNS_NAME, SUBNET_IDS, SECURITY_GROUP_ID)")
 	}
 
 	return &DeploymentOrchestrator{
 		ecsClient:       ecsClient,
+		albClient:       albClient,
 		route53Client:   route53Client,
 		deploymentRepo:  deploymentRepo,
 		albDNS:          albDNS,
-		targetGroupArn:  targetGroupArn,
+		baseDomain:      baseDomain,
 		subnetIDs:       subnetIDs,
 		securityGroupID: securityGroupID,
 	}, nil
@@ -82,35 +93,57 @@ func (o *DeploymentOrchestrator) DeployToECS(
 	// Generate service name based on project ID
 	serviceName := generateServiceName(proj.ID().String())
 
+	dep.AppendLog(fmt.Sprintf("📦 Deploying service: %s", serviceName))
+	dep.AppendLog(fmt.Sprintf("🖼️  Image: %s", imageURI))
+	o.deploymentRepo.Save(ctx, dep)
+
+	// Create ALB target group and listener rule for this deployment
+	dep.AppendLog("🔧 Creating ALB target group and routing rule...")
+	o.deploymentRepo.Save(ctx, dep)
+
+	targetGroupArn, err := o.albClient.CreateTargetGroupAndRule(
+		ctx,
+		serviceName,
+		proj.CustomDomain().String(),
+		o.baseDomain,
+	)
+	if err != nil {
+		dep.AppendLog(fmt.Sprintf("❌ Failed to create ALB routing: %v", err))
+		dep.UpdateStatus(deployment.StatusFailed)
+		o.deploymentRepo.Save(ctx, dep)
+		return fmt.Errorf("failed to create ALB routing: %w", err)
+	}
+
+	dep.AppendLog("✅ ALB routing configured")
+	o.deploymentRepo.Save(ctx, dep)
+
 	// Prepare deployment request
 	deployReq := DeploymentRequest{
 		ServiceName:     serviceName,
 		ImageURI:        imageURI,
 		ProjectID:       proj.ID().String(),
 		CustomDomain:    proj.CustomDomain().String(),
-		CPU:             "256",  // 0.25 vCPU
-		Memory:          "512",  // 512 MB
+		CPU:             "256", // 0.25 vCPU
+		Memory:          "512", // 512 MB
 		DesiredCount:    1,
 		ContainerPort:   8080,
-		TargetGroupArn:  o.targetGroupArn,
+		TargetGroupArn:  targetGroupArn,
 		SubnetIDs:       o.subnetIDs,
 		SecurityGroupID: o.securityGroupID,
 		EnvVars: map[string]string{
-			"PROJECT_ID":    proj.ID().String(),
-			"LANGUAGE":      proj.Language().String(),
-			"PORT":          "8080",
+			"PROJECT_ID": proj.ID().String(),
+			"LANGUAGE":   proj.Language().String(),
+			"PORT":       "8080",
 		},
 	}
-
-	dep.AppendLog(fmt.Sprintf("📦 Deploying service: %s", serviceName))
-	dep.AppendLog(fmt.Sprintf("🖼️  Image: %s", imageURI))
-	o.deploymentRepo.Save(ctx, dep)
 
 	// Deploy to ECS
 	if err := o.ecsClient.DeployService(ctx, deployReq); err != nil {
 		dep.AppendLog(fmt.Sprintf("❌ ECS deployment failed: %v", err))
 		dep.UpdateStatus(deployment.StatusFailed)
 		o.deploymentRepo.Save(ctx, dep)
+		// Clean up ALB resources
+		o.albClient.DeleteTargetGroupAndRule(ctx, serviceName)
 		return fmt.Errorf("failed to deploy to ECS: %w", err)
 	}
 
@@ -130,7 +163,7 @@ func (o *DeploymentOrchestrator) DeployToECS(
 	o.deploymentRepo.Save(ctx, dep)
 
 	// Create/Update DNS record
-	dep.AppendLog(fmt.Sprintf("🌐 Configuring DNS for %s.%s...", proj.CustomDomain().String(), os.Getenv("BASE_DOMAIN")))
+	dep.AppendLog(fmt.Sprintf("🌐 Configuring DNS for %s.%s...", proj.CustomDomain().String(), o.baseDomain))
 	o.deploymentRepo.Save(ctx, dep)
 
 	if err := o.route53Client.CreateOrUpdateRecord(ctx, route53.DNSRecordRequest{
@@ -141,11 +174,7 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		dep.AppendLog(fmt.Sprintf("⚠️  Warning: DNS configuration failed: %v", err))
 		// Don't fail deployment if DNS fails
 	} else {
-		baseDomain := os.Getenv("BASE_DOMAIN")
-		if baseDomain == "" {
-			baseDomain = "snapdeploy.app"
-		}
-		deploymentURL := fmt.Sprintf("https://%s.%s", proj.CustomDomain().String(), baseDomain)
+		deploymentURL := fmt.Sprintf("https://%s.%s", proj.CustomDomain().String(), o.baseDomain)
 		dep.AppendLog(fmt.Sprintf("✅ DNS configured successfully"))
 		dep.AppendLog(fmt.Sprintf("🌍 Your app is live at: %s", deploymentURL))
 	}
@@ -187,6 +216,12 @@ func (o *DeploymentOrchestrator) DeleteDeployment(ctx context.Context, proj *pro
 		return fmt.Errorf("failed to delete ECS service: %w", err)
 	}
 
+	// Delete ALB target group and listener rule
+	if err := o.albClient.DeleteTargetGroupAndRule(ctx, serviceName); err != nil {
+		log.Printf("[ECS] Warning: failed to delete ALB routing: %v", err)
+		// Continue even if ALB cleanup fails
+	}
+
 	return nil
 }
 
@@ -200,4 +235,3 @@ func generateServiceName(projectID string) string {
 	}
 	return fmt.Sprintf("snapdeploy-%s", shortID)
 }
-

@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.31.17
 	github.com/aws/aws-sdk-go-v2/service/codebuild v1.68.2
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.67.2
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.51.5
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.59.3
 	github.com/gin-contrib/cors v1.7.0
 	github.com/gin-gonic/gin v1.10.0
