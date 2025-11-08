@@ -1,0 +1,14 @@
+{
+  "folders": [
+	{
+		"path": "."
+	},
+	{
+		"path": "../snapdeploy-ui"
+	},
+	{
+		"path": "../snapdeploy-infra"
+	}
+],
+  "settings": {}
+}

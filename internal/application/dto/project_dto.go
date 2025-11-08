@@ -7,6 +7,7 @@ type CreateProjectRequest struct {
 	BuildCommand   string `json:"build_command"` // Optional
 	RunCommand     string `json:"run_command" binding:"required"`
 	Language       string `json:"language" binding:"required"`
+	CustomDomain   string `json:"custom_domain"` // Optional - will auto-generate if empty
 }
 
 // UpdateProjectRequest represents the request to update a project
@@ -16,6 +17,7 @@ type UpdateProjectRequest struct {
 	BuildCommand   string `json:"build_command"` // Optional
 	RunCommand     string `json:"run_command" binding:"required"`
 	Language       string `json:"language" binding:"required"`
+	CustomDomain   string `json:"custom_domain"` // Optional - will auto-generate if empty
 }
 
 // ProjectResponse represents a project in API responses
@@ -27,6 +29,8 @@ type ProjectResponse struct {
 	BuildCommand   string `json:"build_command"`
 	RunCommand     string `json:"run_command"`
 	Language       string `json:"language"`
+	CustomDomain   string `json:"custom_domain"`
+	DeploymentURL  string `json:"deployment_url"` // Full URL like https://my-app.snapdeploy.app
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }

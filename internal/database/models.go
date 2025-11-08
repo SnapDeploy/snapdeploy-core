@@ -23,15 +23,17 @@ type Deployment struct {
 }
 
 type Project struct {
-	ID             uuid.UUID    `json:"id"`
-	UserID         uuid.UUID    `json:"user_id"`
-	RepositoryUrl  string       `json:"repository_url"`
-	BuildCommand   string       `json:"build_command"`
-	RunCommand     string       `json:"run_command"`
-	Language       string       `json:"language"`
-	CreatedAt      sql.NullTime `json:"created_at"`
-	UpdatedAt      sql.NullTime `json:"updated_at"`
-	InstallCommand string       `json:"install_command"`
+	ID             uuid.UUID      `json:"id"`
+	UserID         uuid.UUID      `json:"user_id"`
+	RepositoryUrl  string         `json:"repository_url"`
+	BuildCommand   sql.NullString `json:"build_command"`
+	RunCommand     string         `json:"run_command"`
+	Language       string         `json:"language"`
+	CreatedAt      sql.NullTime   `json:"created_at"`
+	UpdatedAt      sql.NullTime   `json:"updated_at"`
+	InstallCommand string         `json:"install_command"`
+	// Custom subdomain prefix for the project (e.g., "my-app" becomes "my-app.snapdeploy.app")
+	CustomDomain string `json:"custom_domain"`
 }
 
 type Repository struct {

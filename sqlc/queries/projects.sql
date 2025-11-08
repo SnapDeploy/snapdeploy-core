@@ -23,9 +23,10 @@ INSERT INTO projects (
     install_command,
     build_command,
     run_command,
-    language
+    language,
+    custom_domain
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -37,6 +38,7 @@ SET
     build_command = $4,
     run_command = $5,
     language = $6,
+    custom_domain = $7,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
@@ -50,4 +52,14 @@ SELECT EXISTS(
     SELECT 1 FROM projects
     WHERE user_id = $1 AND repository_url = $2
 );
+
+-- name: ExistsProjectByCustomDomain :one
+SELECT EXISTS(
+    SELECT 1 FROM projects
+    WHERE custom_domain = $1 AND custom_domain != ''
+);
+
+-- name: GetProjectByCustomDomain :one
+SELECT * FROM projects
+WHERE custom_domain = $1 AND custom_domain != '';
 

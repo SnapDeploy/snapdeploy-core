@@ -16,6 +16,7 @@ type Project struct {
 	buildCommand   Command
 	runCommand     Command
 	language       Language
+	customDomain   CustomDomain
 	createdAt      time.Time
 	updatedAt      time.Time
 }
@@ -23,7 +24,7 @@ type Project struct {
 // NewProject creates a new Project entity
 func NewProject(
 	userID user.UserID,
-	repositoryURL, installCommand, buildCommand, runCommand, language string,
+	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 ) (*Project, error) {
 	repoURL, err := NewRepositoryURL(repositoryURL)
 	if err != nil {
@@ -48,6 +49,12 @@ func NewProject(
 		return nil, fmt.Errorf("invalid language: %w", err)
 	}
 
+	// Custom domain - generates random if empty
+	domain, err := NewCustomDomain(customDomain)
+	if err != nil {
+		return nil, fmt.Errorf("invalid custom domain: %w", err)
+	}
+
 	now := time.Now()
 	return &Project{
 		id:             NewProjectID(),
@@ -57,6 +64,7 @@ func NewProject(
 		buildCommand:   buildCmd,
 		runCommand:     runCmd,
 		language:       lang,
+		customDomain:   domain,
 		createdAt:      now,
 		updatedAt:      now,
 	}, nil
@@ -66,7 +74,7 @@ func NewProject(
 func Reconstitute(
 	id string,
 	userID user.UserID,
-	repositoryURL, installCommand, buildCommand, runCommand, language string,
+	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 	createdAt, updatedAt time.Time,
 ) (*Project, error) {
 	projectID, err := ParseProjectID(id)
@@ -97,6 +105,12 @@ func Reconstitute(
 		return nil, fmt.Errorf("invalid language: %w", err)
 	}
 
+	// Custom domain from existing value
+	domain, err := NewCustomDomainFromExisting(customDomain)
+	if err != nil {
+		return nil, fmt.Errorf("invalid custom domain: %w", err)
+	}
+
 	return &Project{
 		id:             projectID,
 		userID:         userID,
@@ -105,6 +119,7 @@ func Reconstitute(
 		buildCommand:   buildCmd,
 		runCommand:     runCmd,
 		language:       lang,
+		customDomain:   domain,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 	}, nil
@@ -112,7 +127,7 @@ func Reconstitute(
 
 // Update updates project configuration
 func (p *Project) Update(
-	repositoryURL, installCommand, buildCommand, runCommand, language string,
+	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 ) error {
 	repoURL, err := NewRepositoryURL(repositoryURL)
 	if err != nil {
@@ -137,11 +152,18 @@ func (p *Project) Update(
 		return fmt.Errorf("invalid language: %w", err)
 	}
 
+	// Custom domain - generates random if empty
+	domain, err := NewCustomDomain(customDomain)
+	if err != nil {
+		return fmt.Errorf("invalid custom domain: %w", err)
+	}
+
 	p.repositoryURL = repoURL
 	p.installCommand = installCmd
 	p.buildCommand = buildCmd
 	p.runCommand = runCmd
 	p.language = lang
+	p.customDomain = domain
 	p.updatedAt = time.Now()
 
 	return nil
@@ -190,8 +212,12 @@ func (p *Project) UpdatedAt() time.Time {
 	return p.updatedAt
 }
 
+func (p *Project) CustomDomain() CustomDomain {
+	return p.customDomain
+}
+
 // String returns string representation (for debugging)
 func (p *Project) String() string {
-	return fmt.Sprintf("Project{id: %s, userID: %s, language: %s}",
-		p.id.String(), p.userID.String(), p.language.String())
+	return fmt.Sprintf("Project{id: %s, userID: %s, language: %s, domain: %s}",
+		p.id.String(), p.userID.String(), p.language.String(), p.customDomain.String())
 }

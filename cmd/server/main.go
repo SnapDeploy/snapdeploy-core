@@ -16,6 +16,7 @@ import (
 	"snapdeploy-core/internal/github"
 	"snapdeploy-core/internal/infrastructure/builder"
 	"snapdeploy-core/internal/infrastructure/codebuild"
+	"snapdeploy-core/internal/infrastructure/ecs"
 	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
 	infraGitHub "snapdeploy-core/internal/infrastructure/github"
 	"snapdeploy-core/internal/infrastructure/persistence"
@@ -106,6 +107,18 @@ func main() {
 		log.Fatalf("Failed to initialize CodeBuild service: %v", err)
 	}
 	log.Printf("CodeBuild service initialized with project: %s", codebuildProjectName)
+
+	// Initialize ECS deployment orchestrator (optional - only if deploying to ECS)
+	ecsOrchestrator, err := ecs.NewDeploymentOrchestrator(deploymentRepository)
+	if err != nil {
+		log.Printf("Warning: ECS deployment orchestrator not initialized: %v", err)
+		log.Printf("Deployments will only build images without deploying to ECS")
+	} else {
+		// Set up the deployment callback
+		deploymentCallback := ecs.NewDeploymentCallbackAdapter(ecsOrchestrator)
+		codebuildService.SetDeploymentCallback(deploymentCallback)
+		log.Printf("ECS deployment orchestrator initialized successfully")
+	}
 
 	userHandler := handlers.NewUserHandler(userService)
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)

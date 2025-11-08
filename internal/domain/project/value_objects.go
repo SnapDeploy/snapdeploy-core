@@ -146,3 +146,85 @@ func (c Command) String() string {
 func (c Command) Equals(other Command) bool {
 	return c.value == other.value
 }
+
+// CustomDomain is a value object representing a custom subdomain prefix
+// The full domain will be: <custom-domain>.<base-domain>
+// e.g., "my-app" becomes "my-app.snapdeploy.app"
+type CustomDomain struct {
+	value string
+}
+
+// NewCustomDomain creates a new CustomDomain with validation
+func NewCustomDomain(domain string) (CustomDomain, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+
+	// If empty, generate a random UUID-based subdomain
+	if domain == "" {
+		domain = generateRandomSubdomain()
+		return CustomDomain{value: domain}, nil
+	}
+
+	// Validate subdomain format (RFC 1123)
+	// Must be lowercase alphanumeric with hyphens, start/end with alphanumeric
+	if len(domain) < 1 || len(domain) > 63 {
+		return CustomDomain{}, fmt.Errorf("custom domain must be between 1 and 63 characters")
+	}
+
+	// Check first and last character
+	if !isAlphanumeric(rune(domain[0])) || !isAlphanumeric(rune(domain[len(domain)-1])) {
+		return CustomDomain{}, fmt.Errorf("custom domain must start and end with alphanumeric characters")
+	}
+
+	// Check all characters are valid
+	for _, c := range domain {
+		if !isAlphanumeric(c) && c != '-' {
+			return CustomDomain{}, fmt.Errorf("custom domain can only contain lowercase letters, numbers, and hyphens")
+		}
+	}
+
+	// Reserved subdomains
+	reserved := []string{"www", "api", "admin", "app", "dashboard", "console", "staging", "prod", "production", "dev", "development", "test", "testing"}
+	for _, r := range reserved {
+		if domain == r {
+			return CustomDomain{}, fmt.Errorf("subdomain '%s' is reserved", domain)
+		}
+	}
+
+	return CustomDomain{value: domain}, nil
+}
+
+// NewCustomDomainFromExisting creates a CustomDomain from an existing value (skips generation)
+func NewCustomDomainFromExisting(domain string) (CustomDomain, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	
+	if domain == "" {
+		return CustomDomain{}, fmt.Errorf("custom domain cannot be empty when reconstituting")
+	}
+	
+	return CustomDomain{value: domain}, nil
+}
+
+// generateRandomSubdomain generates a random subdomain using a short UUID
+func generateRandomSubdomain() string {
+	// Use first 8 characters of UUID (short, unique enough)
+	id := uuid.New().String()
+	return strings.Split(id, "-")[0]
+}
+
+// isAlphanumeric checks if a rune is alphanumeric
+func isAlphanumeric(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+}
+
+func (d CustomDomain) String() string {
+	return d.value
+}
+
+func (d CustomDomain) Equals(other CustomDomain) bool {
+	return d.value == other.value
+}
+
+// IsEmpty checks if the custom domain is empty
+func (d CustomDomain) IsEmpty() bool {
+	return d.value == ""
+}

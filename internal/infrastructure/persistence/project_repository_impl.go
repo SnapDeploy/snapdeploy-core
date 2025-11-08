@@ -40,6 +40,7 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			BuildCommand:   proj.BuildCommand().String(),
 			RunCommand:     proj.RunCommand().String(),
 			Language:       proj.Language().String(),
+			CustomDomain:   proj.CustomDomain().String(),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
@@ -53,6 +54,7 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			BuildCommand:   proj.BuildCommand().String(),
 			RunCommand:     proj.RunCommand().String(),
 			Language:       proj.Language().String(),
+			CustomDomain:   proj.CustomDomain().String(),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
@@ -182,6 +184,7 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		buildCommand,
 		dbProject.RunCommand,
 		dbProject.Language,
+		dbProject.CustomDomain,
 		createdAt,
 		updatedAt,
 	)

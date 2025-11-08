@@ -14,11 +14,19 @@ type SSEBroadcaster interface {
 	BroadcastLog(deploymentID string, logLine string)
 }
 
+// DeploymentCallback is called after a successful build to trigger deployment
+type DeploymentCallback interface {
+	OnBuildSuccess(ctx context.Context, dep *deployment.Deployment, proj *project.Project, imageURI string) error
+}
+
 // CodeBuildService orchestrates builds using AWS CodeBuild
 type CodeBuildService struct {
-	client      *CodeBuildClient
-	deploymentRepo deployment.DeploymentRepository
-	sseManager  SSEBroadcaster
+	client            *CodeBuildClient
+	deploymentRepo    deployment.DeploymentRepository
+	sseManager        SSEBroadcaster
+	deploymentCallback DeploymentCallback
+	currentImageTag   string       // Store image tag for callback
+	currentProject    *project.Project // Store project for callback
 }
 
 // NewCodeBuildService creates a new CodeBuild service
@@ -42,6 +50,11 @@ func (s *CodeBuildService) SetSSEManager(manager interface{}) {
 	if m, ok := manager.(SSEBroadcaster); ok {
 		s.sseManager = m
 	}
+}
+
+// SetDeploymentCallback sets the callback to be invoked after successful build
+func (s *CodeBuildService) SetDeploymentCallback(callback DeploymentCallback) {
+	s.deploymentCallback = callback
 }
 
 // ServiceBuildRequest contains all information needed to build a deployment
@@ -96,6 +109,10 @@ func (s *CodeBuildService) StartBuild(ctx context.Context, req ServiceBuildReque
 	s.logAndUpdate(ctx, dep, fmt.Sprintf("CodeBuild build started: %s", buildID))
 	s.logAndUpdate(ctx, dep, "Build is running in isolated environment...")
 
+	// Store image tag and project for deployment callback
+	s.currentImageTag = req.ImageTag
+	s.currentProject = proj
+
 	// Start monitoring build status in background
 	go s.monitorBuild(ctx, dep, buildID)
 
@@ -116,13 +133,28 @@ func (s *CodeBuildService) monitorBuild(ctx context.Context, dep *deployment.Dep
 	// Update deployment status based on build result
 	switch status {
 	case "SUCCEEDED":
-		s.logAndUpdate(ctx, dep, "Build completed successfully!")
-		dep.UpdateStatus(deployment.StatusDeployed)
+		s.logAndUpdate(ctx, dep, "✅ Build completed successfully!")
+		s.logAndUpdate(ctx, dep, "📦 Image pushed to registry successfully")
+		
+		// Trigger ECS deployment if callback is set
+		if s.deploymentCallback != nil && s.currentProject != nil {
+			s.logAndUpdate(ctx, dep, "🚀 Triggering deployment to ECS...")
+			s.deploymentRepo.Save(ctx, dep)
+			
+			if err := s.deploymentCallback.OnBuildSuccess(ctx, dep, s.currentProject, s.currentImageTag); err != nil {
+				s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Deployment to ECS failed: %v", err))
+				dep.UpdateStatus(deployment.StatusFailed)
+			}
+			// Note: status will be updated to DEPLOYED by the deployment callback
+		} else {
+			// Fallback to old behavior if no callback is set
+			dep.UpdateStatus(deployment.StatusDeployed)
+		}
 	case "FAILED", "FAULT", "TIMED_OUT", "STOPPED":
-		s.logAndUpdate(ctx, dep, fmt.Sprintf("Build failed with status: %s", status))
+		s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Build failed with status: %s", status))
 		dep.UpdateStatus(deployment.StatusFailed)
 	default:
-		s.logAndUpdate(ctx, dep, fmt.Sprintf("Build ended with status: %s", status))
+		s.logAndUpdate(ctx, dep, fmt.Sprintf("⚠️  Build ended with status: %s", status))
 		dep.UpdateStatus(deployment.StatusFailed)
 	}
 

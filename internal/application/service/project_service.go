@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"snapdeploy-core/internal/application/dto"
@@ -53,6 +54,7 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID string, req *
 		req.BuildCommand,
 		req.RunCommand,
 		req.Language,
+		req.CustomDomain,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create project entity: %w", err)
@@ -164,7 +166,7 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID, userID st
 	}
 
 	// Update project
-	if err := proj.Update(req.RepositoryURL, req.InstallCommand, req.BuildCommand, req.RunCommand, req.Language); err != nil {
+	if err := proj.Update(req.RepositoryURL, req.InstallCommand, req.BuildCommand, req.RunCommand, req.Language, req.CustomDomain); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
 
@@ -210,6 +212,15 @@ func (s *ProjectService) DeleteProject(ctx context.Context, projectID, userID st
 
 // toDTO converts a domain project to DTO
 func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
+	// Get base domain from environment
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		baseDomain = "snapdeploy.app" // default
+	}
+
+	// Construct full deployment URL
+	deploymentURL := fmt.Sprintf("https://%s.%s", proj.CustomDomain().String(), baseDomain)
+
 	return &dto.ProjectResponse{
 		ID:             proj.ID().String(),
 		UserID:         proj.UserID().String(),
@@ -218,6 +229,8 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 		BuildCommand:   proj.BuildCommand().String(),
 		RunCommand:     proj.RunCommand().String(),
 		Language:       proj.Language().String(),
+		CustomDomain:   proj.CustomDomain().String(),
+		DeploymentURL:  deploymentURL,
 		CreatedAt:      proj.CreatedAt().Format(time.RFC3339),
 		UpdatedAt:      proj.UpdatedAt().Format(time.RFC3339),
 	}
