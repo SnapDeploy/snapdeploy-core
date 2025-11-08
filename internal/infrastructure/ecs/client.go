@@ -80,7 +80,6 @@ func (c *ECSClient) DeployService(ctx context.Context, req DeploymentRequest) er
 // createTaskDefinition creates a new task definition revision
 func (c *ECSClient) createTaskDefinition(ctx context.Context, req DeploymentRequest) (string, error) {
 	region := os.Getenv("AWS_REGION")
-	accountID := os.Getenv("AWS_ACCOUNT_ID")
 
 	// Create CloudWatch log group if it doesn't exist
 	logGroupName := fmt.Sprintf("/ecs/%s", req.ServiceName)
