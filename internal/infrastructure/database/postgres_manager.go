@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 
 	_ "github.com/lib/pq"
@@ -12,30 +13,26 @@ import (
 
 // PostgresManager handles creation and deletion of user project databases
 type PostgresManager struct {
-	masterDB *sql.DB
-	host     string
-	port     string
-	user     string
-	password string
+	masterDB    *sql.DB
+	connBaseURL string // Base URL without database name for constructing per-project URLs
 }
 
 // NewPostgresManager creates a new PostgreSQL database manager
+// Expects RDS_DATABASE_URL in format: postgresql://user:password@host:port/dbname?sslmode=require
 func NewPostgresManager() (*PostgresManager, error) {
-	host := os.Getenv("RDS_HOST")
-	port := os.Getenv("RDS_PORT")
-	user := os.Getenv("RDS_USER")
-	password := os.Getenv("RDS_PASSWORD")
-	masterDBName := os.Getenv("RDS_DATABASE")
-
-	if host == "" || port == "" || user == "" || password == "" || masterDBName == "" {
-		return nil, fmt.Errorf("missing required RDS environment variables")
+	databaseURL := os.Getenv("RDS_DATABASE_URL")
+	if databaseURL == "" {
+		return nil, fmt.Errorf("RDS_DATABASE_URL environment variable is required")
 	}
 
-	// Connect to master database (postgres) to create/drop other databases
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		host, port, user, password, masterDBName)
+	// Parse the URL to extract components
+	parsedURL, err := url.Parse(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse RDS_DATABASE_URL: %w", err)
+	}
 
-	db, err := sql.Open("postgres", connStr)
+	// Connect to master database
+	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to master database: %w", err)
 	}
@@ -46,14 +43,19 @@ func NewPostgresManager() (*PostgresManager, error) {
 		return nil, fmt.Errorf("failed to ping master database: %w", err)
 	}
 
-	log.Printf("[PostgresManager] Connected to master database at %s:%s", host, port)
+	log.Printf("[PostgresManager] Connected to master database at %s", parsedURL.Host)
+
+	// Build base URL (without database name) for constructing per-project URLs
+	// Format: postgresql://user:password@host:port
+	connBaseURL := fmt.Sprintf("%s://%s@%s",
+		parsedURL.Scheme,
+		parsedURL.User.String(),
+		parsedURL.Host,
+	)
 
 	return &PostgresManager{
-		masterDB: db,
-		host:     host,
-		port:     port,
-		user:     user,
-		password: password,
+		masterDB:    db,
+		connBaseURL: connBaseURL,
 	}, nil
 }
 
@@ -124,8 +126,7 @@ func (m *PostgresManager) DatabaseExists(ctx context.Context, dbName string) (bo
 
 // GetDatabaseURL returns the connection string for a project database
 func (m *PostgresManager) GetDatabaseURL(dbName string) string {
-	return fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
-		m.user, m.password, m.host, m.port, dbName)
+	return fmt.Sprintf("%s/%s?sslmode=require", m.connBaseURL, dbName)
 }
 
 // Close closes the master database connection

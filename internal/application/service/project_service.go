@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -228,14 +229,20 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 	if proj.RequireDB() {
 		// Database name is based on project ID (sanitized)
 		dbName := fmt.Sprintf("proj_%s", proj.ID().String()[:8])
-		dbHost := os.Getenv("RDS_HOST")
-		dbPort := os.Getenv("RDS_PORT")
-		dbUser := os.Getenv("RDS_USER")
-		dbPassword := os.Getenv("RDS_PASSWORD")
 		
-		if dbHost != "" && dbPort != "" && dbUser != "" && dbPassword != "" {
-			databaseURL = fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
-				dbUser, dbPassword, dbHost, dbPort, dbName)
+		// Parse RDS_DATABASE_URL to construct project-specific URL
+		rdsURL := os.Getenv("RDS_DATABASE_URL")
+		if rdsURL != "" {
+			// Parse the master database URL
+			if parsedURL, err := url.Parse(rdsURL); err == nil {
+				// Construct project database URL by replacing the database name
+				databaseURL = fmt.Sprintf("%s://%s@%s/%s?sslmode=require",
+					parsedURL.Scheme,
+					parsedURL.User.String(),
+					parsedURL.Host,
+					dbName,
+				)
+			}
 		}
 	}
 
