@@ -21,13 +21,13 @@ type DeploymentCallback interface {
 
 // CodeBuildService orchestrates builds using AWS CodeBuild
 type CodeBuildService struct {
-	client            *CodeBuildClient
-	deploymentRepo    deployment.DeploymentRepository
-	projectRepo       project.ProjectRepository
-	sseManager        SSEBroadcaster
+	client             *CodeBuildClient
+	deploymentRepo     deployment.DeploymentRepository
+	projectRepo        project.ProjectRepository
+	sseManager         SSEBroadcaster
 	deploymentCallback DeploymentCallback
-	currentImageTag   string       // Store image tag for callback
-	currentProjectID  project.ProjectID // Store project ID to fetch fresh data on deployment
+	currentImageTag    string            // Store image tag for callback
+	currentProjectID   project.ProjectID // Store project ID to fetch fresh data on deployment
 }
 
 // NewCodeBuildService creates a new CodeBuild service
@@ -62,13 +62,13 @@ func (s *CodeBuildService) SetDeploymentCallback(callback DeploymentCallback) {
 
 // ServiceBuildRequest contains all information needed to build a deployment
 type ServiceBuildRequest struct {
-	Deployment     *deployment.Deployment
-	Project        *project.Project
-	RepositoryURL  string
-	Branch         string
-	CommitHash     string
-	ImageTag       string
-	Dockerfile     string
+	Deployment    *deployment.Deployment
+	Project       *project.Project
+	RepositoryURL string
+	Branch        string
+	CommitHash    string
+	ImageTag      string
+	Dockerfile    string
 }
 
 // StartBuild starts a CodeBuild build for a deployment
@@ -85,7 +85,7 @@ func (s *CodeBuildService) StartBuild(ctx context.Context, req ServiceBuildReque
 	}
 
 	// Log initial message
-	s.logAndUpdate(ctx, dep, "Starting build process with AWS CodeBuild...")
+	s.logAndUpdate(ctx, dep, "🔨 Starting build process with AWS CodeBuild...")
 
 	// Prepare CodeBuild request
 	buildReq := BuildRequest{
@@ -103,18 +103,16 @@ func (s *CodeBuildService) StartBuild(ctx context.Context, req ServiceBuildReque
 	// Start the build
 	buildID, err := s.client.StartBuild(ctx, buildReq)
 	if err != nil {
-		s.logAndUpdate(ctx, dep, fmt.Sprintf("Failed to start CodeBuild: %v", err))
+		s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Failed to start CodeBuild: %v", err))
 		dep.UpdateStatus(deployment.StatusFailed)
 		s.deploymentRepo.Save(ctx, dep)
 		return "", fmt.Errorf("failed to start CodeBuild: %w", err)
 	}
 
-	s.logAndUpdate(ctx, dep, fmt.Sprintf("CodeBuild build started: %s", buildID))
-	s.logAndUpdate(ctx, dep, "Build is running in isolated environment...")
+	s.logAndUpdate(ctx, dep, fmt.Sprintf("📋 CodeBuild build started: %s", buildID))
+	s.logAndUpdate(ctx, dep, "⏳ Build is running in isolated environment...")
 
 	// Store image tag and project ID for deployment callback
-	// We store only the ID and fetch fresh project data when deploying
-	// This ensures we always use the latest project configuration (e.g., updated custom_domain)
 	s.currentImageTag = req.ImageTag
 	s.currentProjectID = proj.ID()
 
@@ -129,7 +127,8 @@ func (s *CodeBuildService) monitorBuild(ctx context.Context, dep *deployment.Dep
 	// Wait for build to complete (with 30 minute timeout)
 	status, err := s.client.WaitForBuild(ctx, buildID, 30*time.Minute)
 	if err != nil {
-		s.logAndUpdate(ctx, dep, fmt.Sprintf("Error monitoring build: %v", err))
+		s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Error monitoring build: %v", err))
+		s.fetchAndLogBuildLogs(ctx, dep, buildID)
 		dep.UpdateStatus(deployment.StatusFailed)
 		s.deploymentRepo.Save(ctx, dep)
 		return
@@ -140,9 +139,8 @@ func (s *CodeBuildService) monitorBuild(ctx context.Context, dep *deployment.Dep
 	case "SUCCEEDED":
 		s.logAndUpdate(ctx, dep, "✅ Build completed successfully!")
 		s.logAndUpdate(ctx, dep, "📦 Image pushed to registry successfully")
-		
-		// Fetch fresh project data to ensure we have the latest configuration
-		// This is critical for picking up changes like updated custom_domain
+
+		// Fetch fresh project data
 		proj, err := s.projectRepo.FindByID(ctx, s.currentProjectID)
 		if err != nil {
 			s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Failed to fetch project data: %v", err))
@@ -150,30 +148,67 @@ func (s *CodeBuildService) monitorBuild(ctx context.Context, dep *deployment.Dep
 			s.deploymentRepo.Save(ctx, dep)
 			return
 		}
-		
+
 		// Trigger ECS deployment if callback is set
 		if s.deploymentCallback != nil {
 			s.logAndUpdate(ctx, dep, "🚀 Triggering deployment to ECS...")
 			s.deploymentRepo.Save(ctx, dep)
-			
+
 			if err := s.deploymentCallback.OnBuildSuccess(ctx, dep, proj, s.currentImageTag); err != nil {
 				s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Deployment to ECS failed: %v", err))
 				dep.UpdateStatus(deployment.StatusFailed)
 			}
-			// Note: status will be updated to DEPLOYED by the deployment callback
 		} else {
-			// Fallback to old behavior if no callback is set
 			dep.UpdateStatus(deployment.StatusDeployed)
 		}
+
 	case "FAILED", "FAULT", "TIMED_OUT", "STOPPED":
 		s.logAndUpdate(ctx, dep, fmt.Sprintf("❌ Build failed with status: %s", status))
+		s.logAndUpdate(ctx, dep, "")
+		s.logAndUpdate(ctx, dep, "📜 Fetching build logs...")
+
+		// Fetch and display build logs
+		s.fetchAndLogBuildLogs(ctx, dep, buildID)
+
 		dep.UpdateStatus(deployment.StatusFailed)
+
 	default:
 		s.logAndUpdate(ctx, dep, fmt.Sprintf("⚠️  Build ended with status: %s", status))
+		s.fetchAndLogBuildLogs(ctx, dep, buildID)
 		dep.UpdateStatus(deployment.StatusFailed)
 	}
 
 	s.deploymentRepo.Save(ctx, dep)
+}
+
+// fetchAndLogBuildLogs fetches CloudWatch logs and adds them to the deployment
+func (s *CodeBuildService) fetchAndLogBuildLogs(ctx context.Context, dep *deployment.Deployment, buildID string) {
+	// Wait a moment for logs to be available
+	time.Sleep(2 * time.Second)
+
+	logs, err := s.client.GetBuildLogsFiltered(ctx, buildID)
+	if err != nil {
+		s.logAndUpdate(ctx, dep, fmt.Sprintf("⚠️  Could not fetch build logs: %v", err))
+		s.logAndUpdate(ctx, dep, "Check AWS CodeBuild console for full logs")
+		return
+	}
+
+	if len(logs) == 0 {
+		s.logAndUpdate(ctx, dep, "⚠️  No build logs available")
+		return
+	}
+
+	s.logAndUpdate(ctx, dep, "")
+	s.logAndUpdate(ctx, dep, "═══════════════════════════════════════")
+	s.logAndUpdate(ctx, dep, "           BUILD LOGS")
+	s.logAndUpdate(ctx, dep, "═══════════════════════════════════════")
+
+	for _, line := range logs {
+		s.logAndUpdate(ctx, dep, line)
+	}
+
+	s.logAndUpdate(ctx, dep, "═══════════════════════════════════════")
+	s.logAndUpdate(ctx, dep, "")
 }
 
 // logAndUpdate logs a message and updates the deployment
@@ -189,4 +224,3 @@ func (s *CodeBuildService) logAndUpdate(ctx context.Context, dep *deployment.Dep
 	// Save to database
 	s.deploymentRepo.Save(ctx, dep)
 }
-
