@@ -9,18 +9,17 @@ import (
 
 // Project is a domain entity representing a deployment project
 type Project struct {
-	id               ProjectID
-	userID           user.UserID
-	repositoryURL    RepositoryURL
-	installCommand   Command
-	buildCommand     Command
-	runCommand       Command
-	language         Language
-	customDomain     CustomDomain
-	requireDB        bool
-	migrationCommand Command // Optional database migration command
-	createdAt        time.Time
-	updatedAt        time.Time
+	id             ProjectID
+	userID         user.UserID
+	repositoryURL  RepositoryURL
+	installCommand Command
+	buildCommand   Command
+	runCommand     Command
+	language       Language
+	customDomain   CustomDomain
+	requireDB      bool
+	createdAt      time.Time
+	updatedAt      time.Time
 }
 
 // NewProject creates a new Project entity
@@ -28,7 +27,6 @@ func NewProject(
 	userID user.UserID,
 	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 	requireDB bool,
-	migrationCommand string,
 ) (*Project, error) {
 	repoURL, err := NewRepositoryURL(repositoryURL)
 	if err != nil {
@@ -59,23 +57,19 @@ func NewProject(
 		return nil, fmt.Errorf("invalid custom domain: %w", err)
 	}
 
-	// Migration command is optional
-	migrationCmd := NewOptionalCommand(migrationCommand)
-
 	now := time.Now()
 	return &Project{
-		id:               NewProjectID(),
-		userID:           userID,
-		repositoryURL:    repoURL,
-		installCommand:   installCmd,
-		buildCommand:     buildCmd,
-		runCommand:       runCmd,
-		language:         lang,
-		customDomain:     domain,
-		requireDB:        requireDB,
-		migrationCommand: migrationCmd,
-		createdAt:        now,
-		updatedAt:        now,
+		id:             NewProjectID(),
+		userID:         userID,
+		repositoryURL:  repoURL,
+		installCommand: installCmd,
+		buildCommand:   buildCmd,
+		runCommand:     runCmd,
+		language:       lang,
+		customDomain:   domain,
+		requireDB:      requireDB,
+		createdAt:      now,
+		updatedAt:      now,
 	}, nil
 }
 
@@ -85,7 +79,6 @@ func Reconstitute(
 	userID user.UserID,
 	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 	requireDB bool,
-	migrationCommand string,
 	createdAt, updatedAt time.Time,
 ) (*Project, error) {
 	projectID, err := ParseProjectID(id)
@@ -122,22 +115,18 @@ func Reconstitute(
 		return nil, fmt.Errorf("invalid custom domain: %w", err)
 	}
 
-	// Migration command is optional
-	migrationCmd := NewOptionalCommand(migrationCommand)
-
 	return &Project{
-		id:               projectID,
-		userID:           userID,
-		repositoryURL:    repoURL,
-		installCommand:   installCmd,
-		buildCommand:     buildCmd,
-		runCommand:       runCmd,
-		language:         lang,
-		customDomain:     domain,
-		requireDB:        requireDB,
-		migrationCommand: migrationCmd,
-		createdAt:        createdAt,
-		updatedAt:        updatedAt,
+		id:             projectID,
+		userID:         userID,
+		repositoryURL:  repoURL,
+		installCommand: installCmd,
+		buildCommand:   buildCmd,
+		runCommand:     runCmd,
+		language:       lang,
+		customDomain:   domain,
+		requireDB:      requireDB,
+		createdAt:      createdAt,
+		updatedAt:      updatedAt,
 	}, nil
 }
 
@@ -145,7 +134,6 @@ func Reconstitute(
 func (p *Project) Update(
 	repositoryURL, installCommand, buildCommand, runCommand, language, customDomain string,
 	requireDB bool,
-	migrationCommand string,
 ) error {
 	repoURL, err := NewRepositoryURL(repositoryURL)
 	if err != nil {
@@ -176,9 +164,6 @@ func (p *Project) Update(
 		return fmt.Errorf("invalid custom domain: %w", err)
 	}
 
-	// Migration command is optional
-	migrationCmd := NewOptionalCommand(migrationCommand)
-
 	p.repositoryURL = repoURL
 	p.installCommand = installCmd
 	p.buildCommand = buildCmd
@@ -186,7 +171,6 @@ func (p *Project) Update(
 	p.language = lang
 	p.customDomain = domain
 	p.requireDB = requireDB
-	p.migrationCommand = migrationCmd
 	p.updatedAt = time.Now()
 
 	return nil
@@ -241,10 +225,6 @@ func (p *Project) CustomDomain() CustomDomain {
 
 func (p *Project) RequireDB() bool {
 	return p.requireDB
-}
-
-func (p *Project) MigrationCommand() Command {
-	return p.migrationCommand
 }
 
 // String returns string representation (for debugging)

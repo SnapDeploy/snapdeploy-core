@@ -912,11 +912,6 @@ components:
           description: Whether this project requires a dedicated PostgreSQL database. If true, a fresh database will be created on each deployment.
           example: false
           default: false
-        migration_command:
-          type: string
-          description: Optional command to run database migrations (e.g., "npm run migrate", "python manage.py migrate"). Only used if require_db is true.
-          example: "npm run migrate"
-          nullable: true
 
     UpdateProjectRequest:
       type: object
@@ -961,11 +956,6 @@ components:
           description: Whether this project requires a dedicated PostgreSQL database. If true, a fresh database will be created on each deployment.
           example: false
           default: false
-        migration_command:
-          type: string
-          description: Optional command to run database migrations (e.g., "npm run migrate", "python manage.py migrate"). Only used if require_db is true.
-          example: "npm run migrate"
-          nullable: true
 
     Project:
       type: object
@@ -1012,11 +1002,6 @@ components:
           type: boolean
           description: Whether this project has a dedicated PostgreSQL database
           example: false
-        migration_command:
-          type: string
-          description: Database migration command (if configured)
-          example: "npm run migrate"
-          nullable: true
         database_url:
           type: string
           description: PostgreSQL connection string (only present if require_db is true)

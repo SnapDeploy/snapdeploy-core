@@ -37,10 +37,6 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			String: proj.BuildCommand().String(),
 			Valid:  !proj.BuildCommand().IsEmpty(),
 		}
-		migrationCmd := sql.NullString{
-			String: proj.MigrationCommand().String(),
-			Valid:  !proj.MigrationCommand().IsEmpty(),
-		}
 		_, err := queries.UpdateProject(ctx, &database.UpdateProjectParams{
 			ID:               proj.ID().UUID(),
 			RepositoryUrl:    proj.RepositoryURL().String(),
@@ -50,7 +46,7 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			Language:         proj.Language().String(),
 			CustomDomain:     proj.CustomDomain().String(),
 			RequireDb:        proj.RequireDB(),
-			MigrationCommand: migrationCmd,
+			MigrationCommand: sql.NullString{Valid: false}, // Deprecated, always null
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
@@ -61,10 +57,6 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			String: proj.BuildCommand().String(),
 			Valid:  !proj.BuildCommand().IsEmpty(),
 		}
-		migrationCmd := sql.NullString{
-			String: proj.MigrationCommand().String(),
-			Valid:  !proj.MigrationCommand().IsEmpty(),
-		}
 		_, err := queries.CreateProject(ctx, &database.CreateProjectParams{
 			UserID:           proj.UserID().UUID(),
 			RepositoryUrl:    proj.RepositoryURL().String(),
@@ -74,7 +66,7 @@ func (r *ProjectRepositoryImpl) Save(ctx context.Context, proj *project.Project)
 			Language:         proj.Language().String(),
 			CustomDomain:     proj.CustomDomain().String(),
 			RequireDb:        proj.RequireDB(),
-			MigrationCommand: migrationCmd,
+			MigrationCommand: sql.NullString{Valid: false}, // Deprecated, always null
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
@@ -196,12 +188,6 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		buildCommand = dbProject.BuildCommand.String
 	}
 
-	// Handle nullable migration_command
-	migrationCommand := ""
-	if dbProject.MigrationCommand.Valid {
-		migrationCommand = dbProject.MigrationCommand.String
-	}
-
 	proj, err := project.Reconstitute(
 		dbProject.ID.String(),
 		userID,
@@ -212,7 +198,6 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 		dbProject.Language,
 		dbProject.CustomDomain,
 		dbProject.RequireDb,
-		migrationCommand,
 		createdAt,
 		updatedAt,
 	)
@@ -221,19 +206,13 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 	}
 
 	// If custom domain was empty and got auto-generated, save it back to DB
-	// This handles legacy projects that were created before the custom_domain feature
 	if dbProject.CustomDomain == "" && !proj.CustomDomain().IsEmpty() {
-		// Update the database asynchronously to set the generated domain
 		go func() {
 			ctx := context.Background()
 			queries := database.New(r.db.GetConnection())
 			buildCmd := sql.NullString{
 				String: proj.BuildCommand().String(),
 				Valid:  !proj.BuildCommand().IsEmpty(),
-			}
-			migrationCmd := sql.NullString{
-				String: proj.MigrationCommand().String(),
-				Valid:  !proj.MigrationCommand().IsEmpty(),
 			}
 			queries.UpdateProject(ctx, &database.UpdateProjectParams{
 				ID:               proj.ID().UUID(),
@@ -244,7 +223,7 @@ func (r *ProjectRepositoryImpl) toDomain(dbProject *database.Project) (*project.
 				Language:         proj.Language().String(),
 				CustomDomain:     proj.CustomDomain().String(),
 				RequireDb:        proj.RequireDB(),
-				MigrationCommand: migrationCmd,
+				MigrationCommand: sql.NullString{Valid: false},
 			})
 		}()
 	}

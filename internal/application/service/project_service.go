@@ -57,7 +57,6 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID string, req *
 		req.Language,
 		req.CustomDomain,
 		req.RequireDB,
-		req.MigrationCommand,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create project entity: %w", err)
@@ -169,7 +168,7 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID, userID st
 	}
 
 	// Update project
-	if err := proj.Update(req.RepositoryURL, req.InstallCommand, req.BuildCommand, req.RunCommand, req.Language, req.CustomDomain, req.RequireDB, req.MigrationCommand); err != nil {
+	if err := proj.Update(req.RepositoryURL, req.InstallCommand, req.BuildCommand, req.RunCommand, req.Language, req.CustomDomain, req.RequireDB); err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
 
@@ -229,7 +228,7 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 	if proj.RequireDB() {
 		// Database name is based on project ID (sanitized)
 		dbName := fmt.Sprintf("proj_%s", proj.ID().String()[:8])
-		
+
 		// Parse RDS_DATABASE_URL to construct project-specific URL
 		rdsURL := os.Getenv("RDS_DATABASE_URL")
 		if rdsURL != "" {
@@ -247,19 +246,18 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 	}
 
 	return &dto.ProjectResponse{
-		ID:               proj.ID().String(),
-		UserID:           proj.UserID().String(),
-		RepositoryURL:    proj.RepositoryURL().String(),
-		InstallCommand:   proj.InstallCommand().String(),
-		BuildCommand:     proj.BuildCommand().String(),
-		RunCommand:       proj.RunCommand().String(),
-		Language:         proj.Language().String(),
-		CustomDomain:     proj.CustomDomain().String(),
-		DeploymentURL:    deploymentURL,
-		RequireDB:        proj.RequireDB(),
-		MigrationCommand: proj.MigrationCommand().String(),
-		DatabaseURL:      databaseURL,
-		CreatedAt:        proj.CreatedAt().Format(time.RFC3339),
-		UpdatedAt:        proj.UpdatedAt().Format(time.RFC3339),
+		ID:             proj.ID().String(),
+		UserID:         proj.UserID().String(),
+		RepositoryURL:  proj.RepositoryURL().String(),
+		InstallCommand: proj.InstallCommand().String(),
+		BuildCommand:   proj.BuildCommand().String(),
+		RunCommand:     proj.RunCommand().String(),
+		Language:       proj.Language().String(),
+		CustomDomain:   proj.CustomDomain().String(),
+		DeploymentURL:  deploymentURL,
+		RequireDB:      proj.RequireDB(),
+		DatabaseURL:    databaseURL,
+		CreatedAt:      proj.CreatedAt().Format(time.RFC3339),
+		UpdatedAt:      proj.UpdatedAt().Format(time.RFC3339),
 	}
 }
