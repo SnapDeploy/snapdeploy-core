@@ -166,25 +166,26 @@ func (o *DeploymentOrchestrator) DeployToECS(
 			return fmt.Errorf("database required but database manager not initialized")
 		}
 
-		dep.AppendLog("🗄️  Database required - creating fresh database...")
+		dep.AppendLog("🗄️  Database required - creating fresh database with dedicated user...")
 		o.deploymentRepo.Save(ctx, dep)
 
 		// Generate database name from project ID
 		dbName := database.GetDatabaseName(proj.ID().String())
 
-		// Create/reset database (drops if exists, then creates fresh)
-		if err := o.dbManager.CreateDatabase(ctx, dbName); err != nil {
+		// Create/reset database with fresh user credentials (drops if exists, then creates fresh)
+		dbCreds, err := o.dbManager.CreateDatabase(ctx, dbName)
+		if err != nil {
 			dep.AppendLog(fmt.Sprintf("❌ Failed to create database: %v", err))
 			dep.UpdateStatus(deployment.StatusFailed)
 			o.deploymentRepo.Save(ctx, dep)
 			return fmt.Errorf("failed to create database: %w", err)
 		}
 
-		// Get database URL and add to environment variables
-		databaseURL := o.dbManager.GetDatabaseURL(dbName)
-		projectEnvVars["DATABASE_URL"] = databaseURL
+		// Add database URL to environment variables (contains unique credentials)
+		projectEnvVars["DATABASE_URL"] = dbCreds.DatabaseURL
 
-		dep.AppendLog(fmt.Sprintf("✅ Database created: %s", dbName))
+		dep.AppendLog(fmt.Sprintf("✅ Database created: %s", dbCreds.DatabaseName))
+		dep.AppendLog(fmt.Sprintf("👤 Database user: %s (with unique password)", dbCreds.Username))
 		dep.AppendLog("📋 DATABASE_URL will be available to your application")
 		o.deploymentRepo.Save(ctx, dep)
 	}

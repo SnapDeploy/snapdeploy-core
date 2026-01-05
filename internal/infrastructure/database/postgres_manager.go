@@ -2,19 +2,23 @@ package database
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/url"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
 
 // PostgresManager handles creation and deletion of user project databases
 type PostgresManager struct {
-	masterDB    *sql.DB
-	connBaseURL string // Base URL without database name for constructing per-project URLs
+	masterDB *sql.DB
+	host     string // Database host:port for constructing URLs
+	scheme   string // URL scheme (postgresql)
 }
 
 // NewPostgresManager creates a new PostgreSQL database manager
@@ -45,43 +49,104 @@ func NewPostgresManager() (*PostgresManager, error) {
 
 	log.Printf("[PostgresManager] Connected to master database at %s", parsedURL.Host)
 
-	// Build base URL (without database name) for constructing per-project URLs
-	// Format: postgresql://user:password@host:port
-	connBaseURL := fmt.Sprintf("%s://%s@%s",
-		parsedURL.Scheme,
-		parsedURL.User.String(),
-		parsedURL.Host,
-	)
-
 	return &PostgresManager{
-		masterDB:    db,
-		connBaseURL: connBaseURL,
+		masterDB: db,
+		host:     parsedURL.Host,
+		scheme:   parsedURL.Scheme,
 	}, nil
 }
 
-// CreateDatabase creates a new database for a project
-// If the database already exists, it will be dropped and recreated (fresh state)
-func (m *PostgresManager) CreateDatabase(ctx context.Context, dbName string) error {
-	log.Printf("[PostgresManager] Creating database: %s", dbName)
+// DatabaseCredentials holds the credentials for a project database
+type DatabaseCredentials struct {
+	DatabaseName string
+	Username     string
+	Password     string
+	DatabaseURL  string
+}
 
-	// First, drop the database if it exists (we want fresh database on each deployment)
+// generatePassword creates a cryptographically secure random password
+func generatePassword(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// getUserName generates a username from the database name
+func getUserName(dbName string) string {
+	// Username: user_<dbname> (e.g., user_proj_abc12345)
+	return fmt.Sprintf("user_%s", dbName)
+}
+
+// CreateDatabase creates a new database and user for a project
+// If the database/user already exists, it will be dropped and recreated (fresh state)
+// Returns the credentials including the DATABASE_URL for the project
+func (m *PostgresManager) CreateDatabase(ctx context.Context, dbName string) (*DatabaseCredentials, error) {
+	log.Printf("[PostgresManager] Creating database and user: %s", dbName)
+
+	// Generate username and password
+	username := getUserName(dbName)
+	password, err := generatePassword(24) // 48 character hex string
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password: %w", err)
+	}
+
+	// First, drop the database and user if they exist (we want fresh state on each deployment)
 	if err := m.DropDatabase(ctx, dbName); err != nil {
 		log.Printf("[PostgresManager] Warning: failed to drop existing database %s: %v", dbName, err)
 		// Continue anyway - database might not exist
 	}
 
-	// Create the database
-	query := fmt.Sprintf("CREATE DATABASE %s", dbName)
-	_, err := m.masterDB.ExecContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to create database %s: %w", dbName, err)
+	// Drop the user if exists (must happen after dropping database that depends on it)
+	dropUserQuery := fmt.Sprintf("DROP USER IF EXISTS %s", username)
+	if _, err := m.masterDB.ExecContext(ctx, dropUserQuery); err != nil {
+		log.Printf("[PostgresManager] Warning: failed to drop existing user %s: %v", username, err)
 	}
 
-	log.Printf("[PostgresManager] Successfully created database: %s", dbName)
-	return nil
+	// Create the user with the generated password
+	// Using format string for username but parameterized password to prevent injection
+	createUserQuery := fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", username, strings.ReplaceAll(password, "'", "''"))
+	if _, err := m.masterDB.ExecContext(ctx, createUserQuery); err != nil {
+		return nil, fmt.Errorf("failed to create user %s: %w", username, err)
+	}
+	log.Printf("[PostgresManager] Created user: %s", username)
+
+	// Create the database owned by the new user
+	createDBQuery := fmt.Sprintf("CREATE DATABASE %s OWNER %s", dbName, username)
+	if _, err := m.masterDB.ExecContext(ctx, createDBQuery); err != nil {
+		// Cleanup: drop the user we just created
+		m.masterDB.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", username))
+		return nil, fmt.Errorf("failed to create database %s: %w", dbName, err)
+	}
+
+	// Grant all privileges on the database to the user
+	grantQuery := fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", dbName, username)
+	if _, err := m.masterDB.ExecContext(ctx, grantQuery); err != nil {
+		log.Printf("[PostgresManager] Warning: failed to grant privileges: %v", err)
+		// Continue anyway - ownership should be sufficient
+	}
+
+	log.Printf("[PostgresManager] Successfully created database: %s with user: %s", dbName, username)
+
+	// Build the DATABASE_URL for the project
+	databaseURL := fmt.Sprintf("%s://%s:%s@%s/%s?sslmode=require",
+		m.scheme,
+		username,
+		url.QueryEscape(password),
+		m.host,
+		dbName,
+	)
+
+	return &DatabaseCredentials{
+		DatabaseName: dbName,
+		Username:     username,
+		Password:     password,
+		DatabaseURL:  databaseURL,
+	}, nil
 }
 
-// DropDatabase drops a database
+// DropDatabase drops a database and its associated user
 func (m *PostgresManager) DropDatabase(ctx context.Context, dbName string) error {
 	log.Printf("[PostgresManager] Dropping database: %s", dbName)
 
@@ -100,13 +165,21 @@ func (m *PostgresManager) DropDatabase(ctx context.Context, dbName string) error
 	}
 
 	// Drop the database
-	query := fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)
-	_, err = m.masterDB.ExecContext(ctx, query)
+	dropDBQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)
+	_, err = m.masterDB.ExecContext(ctx, dropDBQuery)
 	if err != nil {
 		return fmt.Errorf("failed to drop database %s: %w", dbName, err)
 	}
 
-	log.Printf("[PostgresManager] Successfully dropped database: %s", dbName)
+	// Drop the associated user
+	username := getUserName(dbName)
+	dropUserQuery := fmt.Sprintf("DROP USER IF EXISTS %s", username)
+	if _, err := m.masterDB.ExecContext(ctx, dropUserQuery); err != nil {
+		log.Printf("[PostgresManager] Warning: failed to drop user %s: %v", username, err)
+		// Continue anyway - user might not exist or might have other dependencies
+	}
+
+	log.Printf("[PostgresManager] Successfully dropped database: %s and user: %s", dbName, username)
 	return nil
 }
 
@@ -122,11 +195,6 @@ func (m *PostgresManager) DatabaseExists(ctx context.Context, dbName string) (bo
 		return false, fmt.Errorf("failed to check database existence: %w", err)
 	}
 	return true, nil
-}
-
-// GetDatabaseURL returns the connection string for a project database
-func (m *PostgresManager) GetDatabaseURL(dbName string) string {
-	return fmt.Sprintf("%s/%s?sslmode=require", m.connBaseURL, dbName)
 }
 
 // Close closes the master database connection
