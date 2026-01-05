@@ -45,24 +45,28 @@ INSERT INTO deployments (
     branch,
     status,
     logs,
+    expires_at,
+    extended_count,
     created_at,
     updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
-RETURNING id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at
+RETURNING id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count
 `
 
 type CreateDeploymentParams struct {
-	ID         uuid.UUID      `json:"id"`
-	ProjectID  uuid.UUID      `json:"project_id"`
-	UserID     uuid.UUID      `json:"user_id"`
-	CommitHash string         `json:"commit_hash"`
-	Branch     string         `json:"branch"`
-	Status     string         `json:"status"`
-	Logs       sql.NullString `json:"logs"`
-	CreatedAt  sql.NullTime   `json:"created_at"`
-	UpdatedAt  sql.NullTime   `json:"updated_at"`
+	ID            uuid.UUID      `json:"id"`
+	ProjectID     uuid.UUID      `json:"project_id"`
+	UserID        uuid.UUID      `json:"user_id"`
+	CommitHash    string         `json:"commit_hash"`
+	Branch        string         `json:"branch"`
+	Status        string         `json:"status"`
+	Logs          sql.NullString `json:"logs"`
+	ExpiresAt     sql.NullTime   `json:"expires_at"`
+	ExtendedCount int32          `json:"extended_count"`
+	CreatedAt     sql.NullTime   `json:"created_at"`
+	UpdatedAt     sql.NullTime   `json:"updated_at"`
 }
 
 func (q *Queries) CreateDeployment(ctx context.Context, arg *CreateDeploymentParams) (*Deployment, error) {
@@ -74,6 +78,8 @@ func (q *Queries) CreateDeployment(ctx context.Context, arg *CreateDeploymentPar
 		arg.Branch,
 		arg.Status,
 		arg.Logs,
+		arg.ExpiresAt,
+		arg.ExtendedCount,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -88,6 +94,8 @@ func (q *Queries) CreateDeployment(ctx context.Context, arg *CreateDeploymentPar
 		&i.Logs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.ExtendedCount,
 	)
 	return &i, err
 }
@@ -102,8 +110,35 @@ func (q *Queries) DeleteDeployment(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const GetActiveDeploymentByProjectID = `-- name: GetActiveDeploymentByProjectID :one
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
+WHERE project_id = $1
+  AND status = 'DEPLOYED'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetActiveDeploymentByProjectID(ctx context.Context, projectID uuid.UUID) (*Deployment, error) {
+	row := q.db.QueryRowContext(ctx, GetActiveDeploymentByProjectID, projectID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.UserID,
+		&i.CommitHash,
+		&i.Branch,
+		&i.Status,
+		&i.Logs,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.ExtendedCount,
+	)
+	return &i, err
+}
+
 const GetDeploymentByID = `-- name: GetDeploymentByID :one
-SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at FROM deployments
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
 WHERE id = $1
 `
 
@@ -120,12 +155,14 @@ func (q *Queries) GetDeploymentByID(ctx context.Context, id uuid.UUID) (*Deploym
 		&i.Logs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.ExtendedCount,
 	)
 	return &i, err
 }
 
 const GetDeploymentsByProjectID = `-- name: GetDeploymentsByProjectID :many
-SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at FROM deployments
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -156,6 +193,8 @@ func (q *Queries) GetDeploymentsByProjectID(ctx context.Context, arg *GetDeploym
 			&i.Logs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExpiresAt,
+			&i.ExtendedCount,
 		); err != nil {
 			return nil, err
 		}
@@ -171,7 +210,7 @@ func (q *Queries) GetDeploymentsByProjectID(ctx context.Context, arg *GetDeploym
 }
 
 const GetDeploymentsByUserID = `-- name: GetDeploymentsByUserID :many
-SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at FROM deployments
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -202,6 +241,52 @@ func (q *Queries) GetDeploymentsByUserID(ctx context.Context, arg *GetDeployment
 			&i.Logs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExpiresAt,
+			&i.ExtendedCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const GetExpiredDeployments = `-- name: GetExpiredDeployments :many
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
+WHERE status = 'DEPLOYED'
+  AND expires_at IS NOT NULL
+  AND expires_at < NOW()
+ORDER BY expires_at ASC
+LIMIT $1
+`
+
+func (q *Queries) GetExpiredDeployments(ctx context.Context, limit int32) ([]*Deployment, error) {
+	rows, err := q.db.QueryContext(ctx, GetExpiredDeployments, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*Deployment{}
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.UserID,
+			&i.CommitHash,
+			&i.Branch,
+			&i.Status,
+			&i.Logs,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ExpiresAt,
+			&i.ExtendedCount,
 		); err != nil {
 			return nil, err
 		}
@@ -217,7 +302,7 @@ func (q *Queries) GetDeploymentsByUserID(ctx context.Context, arg *GetDeployment
 }
 
 const GetLatestDeploymentByProjectID = `-- name: GetLatestDeploymentByProjectID :one
-SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at FROM deployments
+SELECT id, project_id, user_id, commit_hash, branch, status, logs, created_at, updated_at, expires_at, extended_count FROM deployments
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT 1
@@ -236,6 +321,8 @@ func (q *Queries) GetLatestDeploymentByProjectID(ctx context.Context, projectID 
 		&i.Logs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.ExtendedCount,
 	)
 	return &i, err
 }
@@ -245,15 +332,19 @@ UPDATE deployments
 SET
     status = $2,
     logs = $3,
-    updated_at = $4
+    expires_at = $4,
+    extended_count = $5,
+    updated_at = $6
 WHERE id = $1
 `
 
 type UpdateDeploymentParams struct {
-	ID        uuid.UUID      `json:"id"`
-	Status    string         `json:"status"`
-	Logs      sql.NullString `json:"logs"`
-	UpdatedAt sql.NullTime   `json:"updated_at"`
+	ID            uuid.UUID      `json:"id"`
+	Status        string         `json:"status"`
+	Logs          sql.NullString `json:"logs"`
+	ExpiresAt     sql.NullTime   `json:"expires_at"`
+	ExtendedCount int32          `json:"extended_count"`
+	UpdatedAt     sql.NullTime   `json:"updated_at"`
 }
 
 func (q *Queries) UpdateDeployment(ctx context.Context, arg *UpdateDeploymentParams) error {
@@ -261,7 +352,29 @@ func (q *Queries) UpdateDeployment(ctx context.Context, arg *UpdateDeploymentPar
 		arg.ID,
 		arg.Status,
 		arg.Logs,
+		arg.ExpiresAt,
+		arg.ExtendedCount,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const UpdateDeploymentExpiry = `-- name: UpdateDeploymentExpiry :exec
+UPDATE deployments
+SET
+    expires_at = $2,
+    extended_count = $3,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateDeploymentExpiryParams struct {
+	ID            uuid.UUID    `json:"id"`
+	ExpiresAt     sql.NullTime `json:"expires_at"`
+	ExtendedCount int32        `json:"extended_count"`
+}
+
+func (q *Queries) UpdateDeploymentExpiry(ctx context.Context, arg *UpdateDeploymentExpiryParams) error {
+	_, err := q.db.ExecContext(ctx, UpdateDeploymentExpiry, arg.ID, arg.ExpiresAt, arg.ExtendedCount)
 	return err
 }

@@ -30,9 +30,11 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	ExistsProjectByCustomDomain(ctx context.Context, customDomain string) (bool, error)
 	ExistsProjectByRepositoryURL(ctx context.Context, arg *ExistsProjectByRepositoryURLParams) (bool, error)
+	GetActiveDeploymentByProjectID(ctx context.Context, projectID uuid.UUID) (*Deployment, error)
 	GetDeploymentByID(ctx context.Context, id uuid.UUID) (*Deployment, error)
 	GetDeploymentsByProjectID(ctx context.Context, arg *GetDeploymentsByProjectIDParams) ([]*Deployment, error)
 	GetDeploymentsByUserID(ctx context.Context, arg *GetDeploymentsByUserIDParams) ([]*Deployment, error)
+	GetExpiredDeployments(ctx context.Context, limit int32) ([]*Deployment, error)
 	GetLatestDeploymentByProjectID(ctx context.Context, projectID uuid.UUID) (*Deployment, error)
 	GetProjectByCustomDomain(ctx context.Context, customDomain string) (*Project, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (*Project, error)
@@ -48,6 +50,7 @@ type Querier interface {
 	ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User, error)
 	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
 	UpdateDeployment(ctx context.Context, arg *UpdateDeploymentParams) error
+	UpdateDeploymentExpiry(ctx context.Context, arg *UpdateDeploymentExpiryParams) error
 	UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error)
 	UpdateProjectEnvVar(ctx context.Context, arg *UpdateProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)

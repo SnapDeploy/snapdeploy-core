@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/domain/deployment"
@@ -31,14 +32,22 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 		return fmt.Errorf("failed to check if deployment exists: %w", err)
 	}
 
+	// Convert expiration time to nullable
+	var expiresAt sql.NullTime
+	if dep.ExpiresAt() != nil {
+		expiresAt = sql.NullTime{Time: *dep.ExpiresAt(), Valid: true}
+	}
+
 	// If no error, deployment exists - update it
 	if err == nil {
 		// Update existing deployment
 		err := queries.UpdateDeployment(ctx, &database.UpdateDeploymentParams{
-			ID:        dep.ID().UUID(),
-			Status:    dep.Status().String(),
-			Logs:      sql.NullString{String: dep.Logs().String(), Valid: true},
-			UpdatedAt: sql.NullTime{Time: dep.UpdatedAt(), Valid: true},
+			ID:            dep.ID().UUID(),
+			Status:        dep.Status().String(),
+			Logs:          sql.NullString{String: dep.Logs().String(), Valid: true},
+			ExpiresAt:     expiresAt,
+			ExtendedCount: int32(dep.ExtendedCount()),
+			UpdatedAt:     sql.NullTime{Time: dep.UpdatedAt(), Valid: true},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update deployment: %w", err)
@@ -46,15 +55,17 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 	} else {
 		// Deployment doesn't exist (err == sql.ErrNoRows) - create it
 		_, err := queries.CreateDeployment(ctx, &database.CreateDeploymentParams{
-			ID:         dep.ID().UUID(),
-			ProjectID:  dep.ProjectID().UUID(),
-			UserID:     dep.UserID().UUID(),
-			CommitHash: dep.CommitHash().String(),
-			Branch:     dep.Branch().String(),
-			Status:     dep.Status().String(),
-			Logs:       sql.NullString{String: dep.Logs().String(), Valid: true},
-			CreatedAt:  sql.NullTime{Time: dep.CreatedAt(), Valid: true},
-			UpdatedAt:  sql.NullTime{Time: dep.UpdatedAt(), Valid: true},
+			ID:            dep.ID().UUID(),
+			ProjectID:     dep.ProjectID().UUID(),
+			UserID:        dep.UserID().UUID(),
+			CommitHash:    dep.CommitHash().String(),
+			Branch:        dep.Branch().String(),
+			Status:        dep.Status().String(),
+			Logs:          sql.NullString{String: dep.Logs().String(), Valid: true},
+			ExpiresAt:     expiresAt,
+			ExtendedCount: int32(dep.ExtendedCount()),
+			CreatedAt:     sql.NullTime{Time: dep.CreatedAt(), Valid: true},
+			UpdatedAt:     sql.NullTime{Time: dep.UpdatedAt(), Valid: true},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create deployment: %w", err)
@@ -180,6 +191,63 @@ func (r *DeploymentRepositoryImpl) FindLatestByProjectID(ctx context.Context, pr
 	return r.toDomain(dbDeployment)
 }
 
+// FindExpired retrieves deployments that have passed their expiration time
+func (r *DeploymentRepositoryImpl) FindExpired(ctx context.Context, limit int32) ([]*deployment.Deployment, error) {
+	queries := database.New(r.db.GetConnection())
+
+	dbDeployments, err := queries.GetExpiredDeployments(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get expired deployments: %w", err)
+	}
+
+	deployments := make([]*deployment.Deployment, len(dbDeployments))
+	for i, dbDeployment := range dbDeployments {
+		domainDeployment, err := r.toDomain(dbDeployment)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert deployment: %w", err)
+		}
+		deployments[i] = domainDeployment
+	}
+
+	return deployments, nil
+}
+
+// UpdateExpiresAt updates the expiration time for a deployment
+func (r *DeploymentRepositoryImpl) UpdateExpiresAt(ctx context.Context, id deployment.DeploymentID, expiresAt *time.Time, extendedCount int) error {
+	queries := database.New(r.db.GetConnection())
+
+	var expiry sql.NullTime
+	if expiresAt != nil {
+		expiry = sql.NullTime{Time: *expiresAt, Valid: true}
+	}
+
+	err := queries.UpdateDeploymentExpiry(ctx, &database.UpdateDeploymentExpiryParams{
+		ID:            id.UUID(),
+		ExpiresAt:     expiry,
+		ExtendedCount: int32(extendedCount),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update deployment expiry: %w", err)
+	}
+
+	return nil
+}
+
+// FindActiveByProjectID returns the active (DEPLOYED) deployment for a project
+func (r *DeploymentRepositoryImpl) FindActiveByProjectID(ctx context.Context, projectID project.ProjectID) (*deployment.Deployment, error) {
+	queries := database.New(r.db.GetConnection())
+
+	dbDeployment, err := queries.GetActiveDeploymentByProjectID(ctx, projectID.UUID())
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No active deployment exists
+		}
+		return nil, fmt.Errorf("failed to get active deployment: %w", err)
+	}
+
+	return r.toDomain(dbDeployment)
+}
+
 // toDomain converts database deployment to domain deployment
 func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (*deployment.Deployment, error) {
 	projectID, err := project.ParseProjectID(dbDeployment.ProjectID.String())
@@ -198,6 +266,12 @@ func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (
 		logs = dbDeployment.Logs.String
 	}
 
+	// Convert nullable expiration time
+	var expiresAt *time.Time
+	if dbDeployment.ExpiresAt.Valid {
+		expiresAt = &dbDeployment.ExpiresAt.Time
+	}
+
 	return deployment.Reconstitute(
 		dbDeployment.ID.String(),
 		projectID,
@@ -206,6 +280,8 @@ func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (
 		dbDeployment.Branch,
 		dbDeployment.Status,
 		logs,
+		expiresAt,
+		int(dbDeployment.ExtendedCount),
 		createdAt,
 		updatedAt,
 	)

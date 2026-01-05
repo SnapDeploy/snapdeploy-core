@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"context"
+	"time"
 
 	"snapdeploy-core/internal/domain/project"
 	"snapdeploy-core/internal/domain/user"
@@ -32,5 +33,16 @@ type DeploymentRepository interface {
 
 	// FindLatestByProjectID retrieves the most recent deployment for a project
 	FindLatestByProjectID(ctx context.Context, projectID project.ProjectID) (*Deployment, error)
+
+	// FindExpired retrieves deployments that have passed their expiration time
+	// and are still in DEPLOYED status, limited to the specified count
+	FindExpired(ctx context.Context, limit int32) ([]*Deployment, error)
+
+	// UpdateExpiresAt updates the expiration time for a deployment
+	UpdateExpiresAt(ctx context.Context, id DeploymentID, expiresAt *time.Time, extendedCount int) error
+
+	// FindActiveByProjectID returns the active (DEPLOYED) deployment for a project, if any
+	// Returns nil, nil if no active deployment exists
+	FindActiveByProjectID(ctx context.Context, projectID project.ProjectID) (*Deployment, error)
 }
 

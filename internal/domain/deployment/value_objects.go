@@ -48,17 +48,24 @@ const (
 	StatusDeployed   DeploymentStatus = "DEPLOYED"
 	StatusFailed     DeploymentStatus = "FAILED"
 	StatusRolledBack DeploymentStatus = "ROLLED_BACK"
+	StatusExpired    DeploymentStatus = "EXPIRED"
 )
+
+// DefaultTTLHours is the default time-to-live for deployments
+const DefaultTTLHours = 6
+
+// MaxExtensions is the maximum number of times a deployment can be extended
+const MaxExtensions = 3
 
 // NewDeploymentStatus creates a new DeploymentStatus with validation
 func NewDeploymentStatus(status string) (DeploymentStatus, error) {
 	status = strings.ToUpper(strings.TrimSpace(status))
 
 	switch DeploymentStatus(status) {
-	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack:
+	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired:
 		return DeploymentStatus(status), nil
 	default:
-		return "", fmt.Errorf("invalid deployment status: %s (must be one of: PENDING, BUILDING, DEPLOYING, DEPLOYED, FAILED, ROLLED_BACK)", status)
+		return "", fmt.Errorf("invalid deployment status: %s (must be one of: PENDING, BUILDING, DEPLOYING, DEPLOYED, FAILED, ROLLED_BACK, EXPIRED)", status)
 	}
 }
 
@@ -68,7 +75,7 @@ func (s DeploymentStatus) String() string {
 
 func (s DeploymentStatus) IsValid() bool {
 	switch s {
-	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack:
+	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired:
 		return true
 	default:
 		return false
@@ -76,7 +83,12 @@ func (s DeploymentStatus) IsValid() bool {
 }
 
 func (s DeploymentStatus) IsTerminal() bool {
-	return s == StatusDeployed || s == StatusFailed || s == StatusRolledBack
+	return s == StatusDeployed || s == StatusFailed || s == StatusRolledBack || s == StatusExpired
+}
+
+// IsActive returns true if the deployment is currently running (can expire)
+func (s DeploymentStatus) IsActive() bool {
+	return s == StatusDeployed
 }
 
 // CommitHash represents a Git commit hash

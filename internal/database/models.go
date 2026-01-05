@@ -12,15 +12,17 @@ import (
 )
 
 type Deployment struct {
-	ID         uuid.UUID      `json:"id"`
-	ProjectID  uuid.UUID      `json:"project_id"`
-	UserID     uuid.UUID      `json:"user_id"`
-	CommitHash string         `json:"commit_hash"`
-	Branch     string         `json:"branch"`
-	Status     string         `json:"status"`
-	Logs       sql.NullString `json:"logs"`
-	CreatedAt  sql.NullTime   `json:"created_at"`
-	UpdatedAt  sql.NullTime   `json:"updated_at"`
+	ID            uuid.UUID      `json:"id"`
+	ProjectID     uuid.UUID      `json:"project_id"`
+	UserID        uuid.UUID      `json:"user_id"`
+	CommitHash    string         `json:"commit_hash"`
+	Branch        string         `json:"branch"`
+	Status        string         `json:"status"`
+	Logs          sql.NullString `json:"logs"`
+	CreatedAt     sql.NullTime   `json:"created_at"`
+	UpdatedAt     sql.NullTime   `json:"updated_at"`
+	ExpiresAt     sql.NullTime   `json:"expires_at"`
+	ExtendedCount int32          `json:"extended_count"`
 }
 
 type Project struct {

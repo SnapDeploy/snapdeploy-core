@@ -119,6 +119,16 @@ func (h *DeploymentHandler) CreateDeployment(c *gin.Context) {
 
 	response, err := h.deploymentService.CreateDeployment(c.Request.Context(), dbUser.ID, &req)
 	if err != nil {
+		// Check for active deployment conflict
+		var activeDepErr *service.ActiveDeploymentError
+		if errors.As(err, &activeDepErr) {
+			c.JSON(http.StatusConflict, dto.ActiveDeploymentExistsResponse{
+				Error:              "active_deployment_exists",
+				Message:            "An active deployment already exists for this project. Set force=true to replace it.",
+				ExistingDeployment: activeDepErr.ExistingDeployment,
+			})
+			return
+		}
 		if errors.Is(err, deployment.ErrUnauthorized) {
 			c.JSON(http.StatusForbidden, ErrorResponse{
 				Error:   "forbidden",
@@ -667,6 +677,101 @@ func (h *DeploymentHandler) GetLatestProjectDeployment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "fetch_failed",
 			Message: "Failed to fetch latest deployment",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ExtendDeploymentTTL handles POST /deployments/:id/extend
+// @Summary Extend deployment TTL
+// @Description Extends the time-to-live of a deployment by 6 hours
+// @Tags Deployments
+// @Accept json
+// @Produce json
+// @Security ClerkAuth
+// @Param id path string true "Deployment ID"
+// @Success 200 {object} dto.ExtendDeploymentResponse
+// @Failure 400 {object} ErrorResponse "Maximum extensions reached or deployment not active"
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /deployments/{id}/extend [post]
+func (h *DeploymentHandler) ExtendDeploymentTTL(c *gin.Context) {
+	deploymentID := c.Param("id")
+
+	// Get authenticated user from context
+	clerkUserData, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error:   "unauthorized",
+			Message: "User not found in context",
+		})
+		return
+	}
+
+	clerkUser, ok := clerkUserData.(*middleware.ClerkUser)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "Invalid user type in context",
+		})
+		return
+	}
+
+	// Get the internal user ID from Clerk ID
+	dbUser, err := h.userService.GetOrCreateUserByClerkID(c.Request.Context(), clerkUser.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to resolve user",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	response, err := h.deploymentService.ExtendDeploymentTTL(c.Request.Context(), deploymentID, dbUser.ID)
+	if err != nil {
+		if errors.Is(err, deployment.ErrDeploymentNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "Deployment not found",
+			})
+			return
+		}
+		if errors.Is(err, deployment.ErrUnauthorized) {
+			c.JSON(http.StatusForbidden, ErrorResponse{
+				Error:   "forbidden",
+				Message: "You don't have permission to extend this deployment",
+			})
+			return
+		}
+		if errors.Is(err, deployment.ErrMaxExtensionsReached) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "max_extensions_reached",
+				Message: "Maximum number of extensions reached (3)",
+			})
+			return
+		}
+		if errors.Is(err, deployment.ErrCannotExtendNonDeployed) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "cannot_extend",
+				Message: "Can only extend deployments that are currently deployed",
+			})
+			return
+		}
+		if errors.Is(err, deployment.ErrDeploymentExpired) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "deployment_expired",
+				Message: "Cannot extend an expired deployment",
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "extend_failed",
+			Message: "Failed to extend deployment TTL",
 			Details: err.Error(),
 		})
 		return

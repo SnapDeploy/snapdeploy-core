@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"snapdeploy-core/internal/application/dto"
@@ -11,21 +12,38 @@ import (
 	"snapdeploy-core/internal/domain/user"
 )
 
+// CleanupServiceInterface defines the interface for cleanup operations
+type CleanupServiceInterface interface {
+	CleanupDeployment(ctx context.Context, dep *deployment.Deployment) error
+}
+
 // DeploymentService handles deployment-related use cases
 type DeploymentService struct {
 	deploymentRepo deployment.DeploymentRepository
 	projectRepo    project.ProjectRepository
+	cleanupService CleanupServiceInterface
 }
 
 // NewDeploymentService creates a new deployment service
 func NewDeploymentService(
 	deploymentRepo deployment.DeploymentRepository,
 	projectRepo project.ProjectRepository,
+	cleanupService CleanupServiceInterface,
 ) *DeploymentService {
 	return &DeploymentService{
 		deploymentRepo: deploymentRepo,
 		projectRepo:    projectRepo,
+		cleanupService: cleanupService,
 	}
+}
+
+// ActiveDeploymentError wraps the existing deployment info for 409 responses
+type ActiveDeploymentError struct {
+	ExistingDeployment *dto.DeploymentResponse
+}
+
+func (e *ActiveDeploymentError) Error() string {
+	return deployment.ErrActiveDeploymentExists.Error()
 }
 
 // CreateDeployment creates a new deployment
@@ -50,6 +68,39 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, userID string,
 
 	if !proj.BelongsToUser(uid) {
 		return nil, deployment.ErrUnauthorized
+	}
+
+	// Check for existing active deployment
+	existingDep, err := s.deploymentRepo.FindActiveByProjectID(ctx, pid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for active deployment: %w", err)
+	}
+
+	if existingDep != nil {
+		if !req.Force {
+			// Return error with existing deployment info for UI to show confirmation
+			return nil, &ActiveDeploymentError{
+				ExistingDeployment: s.toDTO(existingDep),
+			}
+		}
+
+		// Force=true: Clean up and delete existing deployment first
+		log.Printf("[Deploy] Force replacing existing deployment %s for project %s",
+			existingDep.ID().String(), pid.String())
+
+		// Clean up AWS resources if deployment was DEPLOYED
+		if existingDep.Status() == deployment.StatusDeployed && s.cleanupService != nil {
+			if err := s.cleanupService.CleanupDeployment(ctx, existingDep); err != nil {
+				log.Printf("[Deploy] Warning: failed to cleanup existing deployment: %v", err)
+				// Continue with deletion even if cleanup fails
+			}
+		}
+
+		// Delete the existing deployment record
+		if err := s.deploymentRepo.Delete(ctx, existingDep.ID()); err != nil {
+			return nil, fmt.Errorf("failed to delete existing deployment: %w", err)
+		}
+		log.Printf("[Deploy] Deleted existing deployment %s", existingDep.ID().String())
 	}
 
 	// Create deployment entity
@@ -253,7 +304,7 @@ func (s *DeploymentService) AppendDeploymentLog(ctx context.Context, deploymentI
 	return s.toDTO(dep), nil
 }
 
-// DeleteDeployment deletes a deployment
+// DeleteDeployment deletes a deployment and cleans up its AWS resources if deployed
 func (s *DeploymentService) DeleteDeployment(ctx context.Context, deploymentID, userID string) error {
 	// Parse IDs
 	did, err := deployment.ParseDeploymentID(deploymentID)
@@ -277,11 +328,21 @@ func (s *DeploymentService) DeleteDeployment(ctx context.Context, deploymentID, 
 		return deployment.ErrUnauthorized
 	}
 
-	// Delete deployment
+	// Clean up AWS resources if deployment was DEPLOYED
+	if dep.Status() == deployment.StatusDeployed && s.cleanupService != nil {
+		log.Printf("[Delete] Cleaning up AWS resources for deployment %s", deploymentID)
+		if err := s.cleanupService.CleanupDeployment(ctx, dep); err != nil {
+			log.Printf("[Delete] Warning: failed to cleanup deployment: %v", err)
+			// Continue with deletion even if cleanup fails - resources may have been partially cleaned
+		}
+	}
+
+	// Delete deployment from database
 	if err := s.deploymentRepo.Delete(ctx, did); err != nil {
 		return fmt.Errorf("failed to delete deployment: %w", err)
 	}
 
+	log.Printf("[Delete] Successfully deleted deployment %s", deploymentID)
 	return nil
 }
 
@@ -300,18 +361,79 @@ func (s *DeploymentService) GetLatestDeploymentByProjectID(ctx context.Context, 
 	return s.toDTO(dep), nil
 }
 
+// ExtendDeploymentTTL extends the TTL of a deployment by the default duration
+func (s *DeploymentService) ExtendDeploymentTTL(ctx context.Context, deploymentID, userID string) (*dto.ExtendDeploymentResponse, error) {
+	// Parse IDs
+	did, err := deployment.ParseDeploymentID(deploymentID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid deployment ID: %w", err)
+	}
+
+	uid, err := user.ParseUserID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	// Get deployment
+	dep, err := s.deploymentRepo.FindByID(ctx, did)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check ownership
+	if !dep.BelongsToUser(uid) {
+		return nil, deployment.ErrUnauthorized
+	}
+
+	// Check if deployment is expired
+	if dep.Status() == deployment.StatusExpired {
+		return nil, deployment.ErrDeploymentExpired
+	}
+
+	// Extend TTL
+	if err := dep.ExtendTTL(); err != nil {
+		return nil, err
+	}
+
+	// Save updated deployment
+	if err := s.deploymentRepo.Save(ctx, dep); err != nil {
+		return nil, fmt.Errorf("failed to save deployment: %w", err)
+	}
+
+	var expiresAt string
+	if dep.ExpiresAt() != nil {
+		expiresAt = dep.ExpiresAt().Format(time.RFC3339)
+	}
+
+	return &dto.ExtendDeploymentResponse{
+		ID:            dep.ID().String(),
+		ExpiresAt:     expiresAt,
+		ExtendedCount: dep.ExtendedCount(),
+		CanExtend:     dep.CanExtend(),
+	}, nil
+}
+
 // toDTO converts a domain deployment to DTO
 func (s *DeploymentService) toDTO(dep *deployment.Deployment) *dto.DeploymentResponse {
+	var expiresAt *string
+	if dep.ExpiresAt() != nil {
+		formatted := dep.ExpiresAt().Format(time.RFC3339)
+		expiresAt = &formatted
+	}
+
 	return &dto.DeploymentResponse{
-		ID:         dep.ID().String(),
-		ProjectID:  dep.ProjectID().String(),
-		UserID:     dep.UserID().String(),
-		CommitHash: dep.CommitHash().String(),
-		Branch:     dep.Branch().String(),
-		Status:     dep.Status().String(),
-		Logs:       dep.Logs().String(),
-		CreatedAt:  dep.CreatedAt().Format(time.RFC3339),
-		UpdatedAt:  dep.UpdatedAt().Format(time.RFC3339),
+		ID:            dep.ID().String(),
+		ProjectID:    dep.ProjectID().String(),
+		UserID:       dep.UserID().String(),
+		CommitHash:   dep.CommitHash().String(),
+		Branch:       dep.Branch().String(),
+		Status:       dep.Status().String(),
+		Logs:         dep.Logs().String(),
+		ExpiresAt:    expiresAt,
+		ExtendedCount: dep.ExtendedCount(),
+		CanExtend:    dep.CanExtend(),
+		CreatedAt:    dep.CreatedAt().Format(time.RFC3339),
+		UpdatedAt:    dep.UpdatedAt().Format(time.RFC3339),
 	}
 }
 

@@ -15,9 +15,11 @@ import (
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/github"
 	"snapdeploy-core/internal/infrastructure/builder"
+	"snapdeploy-core/internal/infrastructure/cleanup"
 	"snapdeploy-core/internal/infrastructure/codebuild"
 	"snapdeploy-core/internal/infrastructure/ecs"
 	"snapdeploy-core/internal/infrastructure/encryption"
+	"snapdeploy-core/internal/infrastructure/worker"
 	infraClerk "snapdeploy-core/internal/infrastructure/clerk"
 	infraGitHub "snapdeploy-core/internal/infrastructure/github"
 	"snapdeploy-core/internal/infrastructure/persistence"
@@ -90,8 +92,9 @@ func main() {
 	userService := service.NewUserService(userRepository, repositoryRepository, clerkService)
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
 	projectService := service.NewProjectService(projectRepository)
-	deploymentService := service.NewDeploymentService(deploymentRepository, projectRepository)
 	envVarService := service.NewEnvVarService(envVarRepository, projectRepository, encryptionService)
+
+	// Note: deploymentService is initialized after cleanupService below
 
 	// Initialize presentation layer
 	// HTTP handlers
@@ -129,6 +132,25 @@ func main() {
 		deploymentCallback := ecs.NewDeploymentCallbackAdapter(ecsOrchestrator)
 		codebuildService.SetDeploymentCallback(deploymentCallback)
 		log.Printf("ECS deployment orchestrator initialized successfully")
+	}
+
+	// Initialize cleanup service for TTL-based deployment expiration
+	cleanupService, err := cleanup.NewCleanupServiceFromEnv(projectRepository)
+	if err != nil {
+		log.Printf("Warning: Cleanup service not initialized: %v", err)
+	} else {
+		log.Printf("Cleanup service initialized successfully")
+	}
+
+	// Initialize deployment service (after cleanup service so it can use cleanup)
+	deploymentService := service.NewDeploymentService(deploymentRepository, projectRepository, cleanupService)
+
+	// Initialize TTL worker for automatic deployment expiration
+	var ttlWorker *worker.TTLWorker
+	if cleanupService != nil {
+		workerConfig := worker.DefaultTTLWorkerConfig()
+		ttlWorker = worker.NewTTLWorker(deploymentRepository, cleanupService, workerConfig)
+		log.Printf("TTL worker initialized with interval=%v", workerConfig.Interval)
 	}
 
 	userHandler := handlers.NewUserHandler(userService)
@@ -240,6 +262,7 @@ func main() {
 				protectedDeployments.GET("/:id", deploymentHandler.GetDeployment)
 				protectedDeployments.PATCH("/:id/status", deploymentHandler.UpdateDeploymentStatus)
 				protectedDeployments.POST("/:id/logs", deploymentHandler.AppendDeploymentLog)
+				protectedDeployments.POST("/:id/extend", deploymentHandler.ExtendDeploymentTTL)
 				protectedDeployments.DELETE("/:id", deploymentHandler.DeleteDeployment)
 			}
 		}
@@ -260,6 +283,12 @@ func main() {
 		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
 	}
 
+	// Start TTL worker before server
+	if ttlWorker != nil {
+		ttlWorker.Start(context.Background())
+		log.Printf("TTL worker started")
+	}
+
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on %s", cfg.GetServerAddress())
@@ -273,6 +302,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
+
+	// Stop TTL worker first
+	if ttlWorker != nil {
+		log.Println("Stopping TTL worker...")
+		ttlWorker.Stop()
+	}
 
 	// Give outstanding requests 30 seconds to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
