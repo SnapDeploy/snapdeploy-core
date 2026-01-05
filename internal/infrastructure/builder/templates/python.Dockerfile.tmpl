@@ -2,13 +2,14 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for building packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt* pyproject.toml* setup.py* ./
+# Copy requirements/dependency files
+COPY requirements.txt* pyproject.toml* setup.py* setup.cfg* poetry.lock* ./
 
 # Install dependencies
 RUN {{.InstallCommand}}
@@ -17,8 +18,8 @@ RUN {{.InstallCommand}}
 COPY . .
 
 {{if .BuildCommand}}
-# Build if needed
-RUN {{.BuildCommand}} || true
+# Build application
+RUN {{.BuildCommand}}
 {{end}}
 
 # Production stage
@@ -26,8 +27,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install runtime dependencies (for packages that need system libs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# Copy installed scripts (gunicorn, uvicorn, etc.)
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code from builder
 COPY --from=builder /app .
 
 # Set PORT environment variable
@@ -37,5 +48,4 @@ ENV PORT={{.Port}}
 EXPOSE {{.Port}}
 
 # Run application
-CMD {{.RunCommand}}
-
+CMD ["/bin/sh", "-c", "{{.RunCommand}}"]

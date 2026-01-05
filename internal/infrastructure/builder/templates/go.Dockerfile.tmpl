@@ -12,8 +12,8 @@ RUN {{.InstallCommand}}
 COPY . .
 
 {{if .BuildCommand}}
-# Build application
-RUN {{.BuildCommand}}
+# Build application (builds static binary for Alpine)
+RUN CGO_ENABLED=0 GOOS=linux {{.BuildCommand}}
 {{end}}
 
 # Production stage
@@ -24,8 +24,9 @@ WORKDIR /app
 # Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
-# Copy binary from builder
-COPY --from=builder /app/bin/* /app/
+# Copy built binary and any config files from builder
+# The binary location depends on build command (e.g., ./app, ./bin/app, etc.)
+COPY --from=builder /app .
 
 # Set PORT environment variable
 ENV PORT={{.Port}}
@@ -33,6 +34,5 @@ ENV PORT={{.Port}}
 # Expose port
 EXPOSE {{.Port}}
 
-# Run application
-CMD {{.RunCommand}}
-
+# Run application (specify path to binary, e.g., ./app or ./bin/app)
+CMD ["/bin/sh", "-c", "{{.RunCommand}}"]

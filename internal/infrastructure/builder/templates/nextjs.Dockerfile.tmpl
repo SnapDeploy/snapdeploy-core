@@ -35,10 +35,20 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built artifacts
+# Copy package files for non-standalone mode
+COPY --from=builder /app/package*.json ./
+
+# Copy node_modules for non-standalone mode (needed if not using standalone output)
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy public assets
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Copy Next.js build output
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+
+# Copy next.config.js if it exists (needed for runtime)
+COPY --from=builder /app/next.config.* ./
 
 USER nextjs
 
@@ -47,5 +57,5 @@ EXPOSE {{.Port}}
 ENV PORT={{.Port}}
 ENV HOSTNAME="0.0.0.0"
 
-CMD {{.RunCommand}}
-
+# Run application (use "node server.js" for standalone, "npm start" for standard)
+CMD ["/bin/sh", "-c", "{{.RunCommand}}"]

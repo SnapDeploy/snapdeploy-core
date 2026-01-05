@@ -31,5 +31,5 @@ ENV PORT={{.Port}}
 EXPOSE {{.Port}}
 
 # Run application
-CMD {{.RunCommand}}
+CMD ["/bin/sh", "-c", "{{.RunCommand}}"]
 

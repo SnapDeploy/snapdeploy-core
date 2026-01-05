@@ -297,7 +297,7 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		// Don't fail deployment if DNS fails
 	} else {
 		deploymentURL := fmt.Sprintf("https://%s.%s", proj.CustomDomain().String(), o.baseDomain)
-		dep.AppendLog(fmt.Sprintf("✅ DNS configured successfully"))
+		dep.AppendLog("✅ DNS configured successfully")
 		dep.AppendLog(fmt.Sprintf("🌍 Your app is live at: %s", deploymentURL))
 	}
 	o.deploymentRepo.Save(ctx, dep)

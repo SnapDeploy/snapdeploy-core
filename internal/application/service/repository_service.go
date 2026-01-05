@@ -38,8 +38,6 @@ func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, user
 		return nil, fmt.Errorf("failed to fetch repositories from GitHub: %w", err)
 	}
 
-	var repositories []*repo.Repository
-
 	// Process each GitHub repository
 	for _, ghRepo := range githubRepos {
 		// Try to find existing repository by URL
@@ -65,7 +63,6 @@ func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, user
 			if err := s.repoRepo.Save(ctx, existingRepo); err != nil {
 				return nil, fmt.Errorf("failed to update repository: %w", err)
 			}
-			repositories = append(repositories, existingRepo)
 		} else {
 			// Create new repository
 			newRepo, err := repo.NewRepository(
@@ -95,7 +92,6 @@ func (s *RepositoryService) SyncRepositoriesFromGitHub(ctx context.Context, user
 			if err := s.repoRepo.Save(ctx, newRepo); err != nil {
 				return nil, fmt.Errorf("failed to save repository: %w", err)
 			}
-			repositories = append(repositories, newRepo)
 		}
 	}
 
