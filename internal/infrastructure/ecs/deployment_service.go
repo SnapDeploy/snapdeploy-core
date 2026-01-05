@@ -325,14 +325,9 @@ func (o *DeploymentOrchestrator) DeleteDeployment(ctx context.Context, proj *pro
 }
 
 // generateServiceName generates a consistent service name from project ID
+// Uses the exported GenerateServiceName from client.go
 func generateServiceName(projectID string) string {
-	// Format: snapdeploy-{first-8-chars-of-project-id}
-	// Keep it short to avoid hitting AWS naming limits
-	shortID := projectID
-	if len(projectID) > 8 {
-		shortID = projectID[:8]
-	}
-	return fmt.Sprintf("snapdeploy-%s", shortID)
+	return GenerateServiceName(projectID)
 }
 
 // parsePort parses a port string to int32

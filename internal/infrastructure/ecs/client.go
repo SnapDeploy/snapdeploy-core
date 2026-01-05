@@ -317,3 +317,87 @@ func (c *ECSClient) ensureLogGroupExists(ctx context.Context, logGroupName, regi
 	log.Printf("[ECS] Created CloudWatch log group: %s", logGroupName)
 	return nil
 }
+
+// GetServiceLogs fetches CloudWatch logs for a running ECS service
+func (c *ECSClient) GetServiceLogs(ctx context.Context, serviceName string, tailLines int) ([]string, error) {
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	logsClient := cloudwatchlogs.NewFromConfig(cfg)
+
+	// CloudWatch log group follows the pattern /ecs/{serviceName}
+	logGroupName := fmt.Sprintf("/ecs/%s", serviceName)
+
+	// First, find log streams in this log group (sorted by last event time)
+	streamsInput := &cloudwatchlogs.DescribeLogStreamsInput{
+		LogGroupName: aws.String(logGroupName),
+		OrderBy:      "LastEventTime",
+		Descending:   aws.Bool(true),
+		Limit:        aws.Int32(5), // Get the 5 most recent streams
+	}
+
+	streamsResult, err := logsClient.DescribeLogStreams(ctx, streamsInput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe log streams: %w", err)
+	}
+
+	if len(streamsResult.LogStreams) == 0 {
+		return nil, fmt.Errorf("no log streams found for service %s", serviceName)
+	}
+
+	// Collect logs from streams
+	var allLogs []string
+
+	// Use default limit if not specified
+	if tailLines <= 0 {
+		tailLines = 200
+	}
+
+	// Get logs from the most recent stream(s)
+	for _, stream := range streamsResult.LogStreams {
+		if stream.LogStreamName == nil {
+			continue
+		}
+
+		eventsInput := &cloudwatchlogs.GetLogEventsInput{
+			LogGroupName:  aws.String(logGroupName),
+			LogStreamName: stream.LogStreamName,
+			StartFromHead: aws.Bool(false), // Get latest logs first
+			Limit:         aws.Int32(int32(tailLines)),
+		}
+
+		eventsResult, err := logsClient.GetLogEvents(ctx, eventsInput)
+		if err != nil {
+			log.Printf("[ECS] Warning: failed to get logs from stream %s: %v", *stream.LogStreamName, err)
+			continue
+		}
+
+		for _, event := range eventsResult.Events {
+			if event.Message != nil {
+				allLogs = append(allLogs, *event.Message)
+			}
+		}
+
+		// If we got enough logs from this stream, stop
+		if len(allLogs) >= tailLines {
+			break
+		}
+	}
+
+	return allLogs, nil
+}
+
+// GenerateServiceName generates a consistent service name from project ID
+// Exported so handlers can use it
+func GenerateServiceName(projectID string) string {
+	// Format: snapdeploy-{first-8-chars-of-project-id}
+	// Keep it short to avoid hitting AWS naming limits
+	shortID := projectID
+	if len(projectID) > 8 {
+		shortID = projectID[:8]
+	}
+	return fmt.Sprintf("snapdeploy-%s", shortID)
+}

@@ -215,6 +215,8 @@ func main() {
 			projects.DELETE("/:id", projectHandler.DeleteProject)
 			projects.GET("/:id/deployments", deploymentHandler.GetProjectDeployments)
 			projects.GET("/:id/deployments/latest", deploymentHandler.GetLatestProjectDeployment)
+			// Runtime logs from CloudWatch
+			projects.GET("/:id/runtime-logs", projectHandler.GetProjectRuntimeLogs)
 			// Environment variables
 			projects.GET("/:id/env", envVarHandler.GetProjectEnvVars)
 			projects.POST("/:id/env", envVarHandler.CreateOrUpdateEnvVar)

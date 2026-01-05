@@ -4,10 +4,12 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"snapdeploy-core/internal/application/dto"
 	"snapdeploy-core/internal/application/service"
 	"snapdeploy-core/internal/domain/project"
+	"snapdeploy-core/internal/infrastructure/ecs"
 	"snapdeploy-core/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -356,4 +358,95 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// RuntimeLogsResponse represents the response for runtime logs
+type RuntimeLogsResponse struct {
+	Logs      []string `json:"logs"`
+	HasMore   bool     `json:"has_more"`
+	Timestamp string   `json:"timestamp"`
+}
+
+// GetProjectRuntimeLogs handles GET /projects/:id/runtime-logs
+// @Summary Get project runtime logs
+// @Description Returns CloudWatch logs from the running ECS service
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Security ClerkAuth
+// @Param id path string true "Project ID"
+// @Param lines query int false "Number of log lines to fetch" default(200) minimum(1) maximum(1000)
+// @Success 200 {object} RuntimeLogsResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /projects/{id}/runtime-logs [get]
+func (h *ProjectHandler) GetProjectRuntimeLogs(c *gin.Context) {
+	projectID := c.Param("id")
+
+	// Verify project exists
+	_, err := h.projectService.GetProjectByID(c.Request.Context(), projectID)
+	if err != nil {
+		if errors.Is(err, project.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "Project not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "fetch_failed",
+			Message: "Failed to fetch project",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	// Parse query parameters
+	lines := 200
+	if linesStr := c.DefaultQuery("lines", "200"); linesStr != "" {
+		if l, err := strconv.Atoi(linesStr); err == nil && l > 0 && l <= 1000 {
+			lines = l
+		}
+	}
+
+	// Create ECS client and fetch logs
+	ecsClient, err := ecs.NewECSClient()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to initialize ECS client",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	// Generate service name from project ID
+	serviceName := ecs.GenerateServiceName(projectID)
+
+	// Fetch logs from CloudWatch
+	logs, err := ecsClient.GetServiceLogs(c.Request.Context(), serviceName, lines)
+	if err != nil {
+		// Check if it's a "no logs" error vs a real error
+		if strings.Contains(err.Error(), "no log streams found") {
+			c.JSON(http.StatusOK, RuntimeLogsResponse{
+				Logs:      []string{},
+				HasMore:   false,
+				Timestamp: "",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "fetch_failed",
+			Message: "Failed to fetch runtime logs",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, RuntimeLogsResponse{
+		Logs:      logs,
+		HasMore:   len(logs) == lines, // If we got exactly the limit, there might be more
+		Timestamp: "",
+	})
 }

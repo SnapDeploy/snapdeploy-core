@@ -439,6 +439,43 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /projects/{id}/runtime-logs:
+    get:
+      summary: Get project runtime logs
+      description: Returns CloudWatch logs from the running ECS service for this project
+      tags:
+        - Projects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            format: uuid
+        - name: lines
+          in: query
+          required: false
+          description: Number of log lines to fetch (default is 200, max is 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+      responses:
+        "200":
+          description: Runtime logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeLogsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
   /deployments:
     post:
       summary: Create a new deployment
@@ -1181,6 +1218,21 @@ components:
           type: integer
           description: Total number of environment variables
           example: 5
+
+    RuntimeLogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            type: string
+          description: Array of log lines from the running application
+        has_more:
+          type: boolean
+          description: Whether there are more logs available beyond the requested limit
+        timestamp:
+          type: string
+          description: Timestamp of when the logs were fetched
 
     Error:
       type: object
