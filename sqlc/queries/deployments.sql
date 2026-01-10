@@ -82,4 +82,3 @@ WHERE project_id = $1
   AND status = 'DEPLOYED'
 ORDER BY created_at DESC
 LIMIT 1;
-

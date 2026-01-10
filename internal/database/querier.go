@@ -22,12 +22,14 @@ type Querier interface {
 	CreateProject(ctx context.Context, arg *CreateProjectParams) (*Project, error)
 	CreateProjectEnvVar(ctx context.Context, arg *CreateProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
+	CreateUserSettings(ctx context.Context, arg *CreateUserSettingsParams) (*UserSetting, error)
 	DeleteAllProjectEnvVars(ctx context.Context, projectID uuid.UUID) error
 	DeleteDeployment(ctx context.Context, id uuid.UUID) error
 	DeleteProject(ctx context.Context, id uuid.UUID) error
 	DeleteProjectEnvVar(ctx context.Context, arg *DeleteProjectEnvVarParams) error
 	DeleteRepository(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUserSettings(ctx context.Context, userID uuid.UUID) error
 	ExistsProjectByCustomDomain(ctx context.Context, customDomain string) (bool, error)
 	ExistsProjectByRepositoryURL(ctx context.Context, arg *ExistsProjectByRepositoryURLParams) (bool, error)
 	GetActiveDeploymentByProjectID(ctx context.Context, projectID uuid.UUID) (*Deployment, error)
@@ -47,6 +49,7 @@ type Querier interface {
 	GetUserByClerkID(ctx context.Context, clerkUserID string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
+	GetUserSettingsByUserID(ctx context.Context, userID uuid.UUID) (*UserSetting, error)
 	ListUsers(ctx context.Context, arg *ListUsersParams) ([]*User, error)
 	SearchRepositoriesByUserID(ctx context.Context, arg *SearchRepositoriesByUserIDParams) ([]*Repository, error)
 	UpdateDeployment(ctx context.Context, arg *UpdateDeploymentParams) error
@@ -54,7 +57,9 @@ type Querier interface {
 	UpdateProject(ctx context.Context, arg *UpdateProjectParams) (*Project, error)
 	UpdateProjectEnvVar(ctx context.Context, arg *UpdateProjectEnvVarParams) (*ProjectEnvironmentVariable, error)
 	UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error)
+	UpdateUserSettings(ctx context.Context, arg *UpdateUserSettingsParams) (*UserSetting, error)
 	UpsertRepository(ctx context.Context, arg *UpsertRepositoryParams) (*Repository, error)
+	UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSetting, error)
 }
 
 var _ Querier = (*Queries)(nil)

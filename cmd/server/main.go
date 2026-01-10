@@ -93,6 +93,7 @@ func main() {
 	repositoryService := service.NewRepositoryService(repositoryRepository, githubService)
 	projectService := service.NewProjectService(projectRepository)
 	envVarService := service.NewEnvVarService(envVarRepository, projectRepository, encryptionService)
+	settingsService := service.NewSettingsService(db)
 
 	// Note: deploymentService is initialized after cleanupService below
 
@@ -157,6 +158,7 @@ func main() {
 	repositoryHandler := handlers.NewRepositoryHandler(repositoryService, clerkClient)
 	projectHandler := handlers.NewProjectHandler(projectService, userService)
 	envVarHandler := handlers.NewEnvVarHandler(envVarService, userService)
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
 	deploymentHandler := handlers.NewDeploymentHandler(
 		deploymentService, 
 		userService, 
@@ -226,6 +228,9 @@ func main() {
 			users.POST("/:id/repos/sync", repositoryHandler.SyncRepositories)
 			users.GET("/:id/projects", projectHandler.GetUserProjects)
 			users.POST("/:id/projects", projectHandler.CreateProject)
+			// User settings
+			users.GET("/:id/settings", settingsHandler.GetUserSettings)
+			users.PUT("/:id/settings", settingsHandler.UpdateUserSettings)
 		}
 
 		// Project routes

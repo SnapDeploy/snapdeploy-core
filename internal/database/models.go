@@ -82,3 +82,11 @@ type User struct {
 	CreatedAt   sql.NullTime `json:"created_at"`
 	UpdatedAt   sql.NullTime `json:"updated_at"`
 }
+
+type UserSetting struct {
+	ID            uuid.UUID      `json:"id"`
+	UserID        uuid.UUID      `json:"user_id"`
+	DefaultBranch sql.NullString `json:"default_branch"`
+	CreatedAt     sql.NullTime   `json:"created_at"`
+	UpdatedAt     sql.NullTime   `json:"updated_at"`
+}

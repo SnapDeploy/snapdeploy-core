@@ -55,4 +55,3 @@ type ActiveDeploymentExistsResponse struct {
 	Message            string              `json:"message"`
 	ExistingDeployment *DeploymentResponse `json:"existing_deployment"`
 }
-

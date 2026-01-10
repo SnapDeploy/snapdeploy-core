@@ -152,6 +152,64 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /users/{id}/settings:
+    get:
+      summary: Get user settings
+      description: Returns settings for a user, creating defaults if none exist
+      tags:
+        - Settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettingsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      summary: Update user settings
+      description: Updates settings for a user
+      tags:
+        - Settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserSettingsRequest"
+      responses:
+        "200":
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettingsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
   /users/{id}/projects:
     get:
       summary: Get user projects
@@ -1234,6 +1292,40 @@ components:
           type: string
           description: Timestamp of when the logs were fetched
 
+    UserSettingsResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Settings unique identifier
+        user_id:
+          type: string
+          format: uuid
+          description: User ID these settings belong to
+        default_branch:
+          type: string
+          description: Default Git branch for new deployments
+          example: "main"
+        created_at:
+          type: string
+          format: date-time
+          description: Settings creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Settings last update timestamp
+
+    UpdateUserSettingsRequest:
+      type: object
+      properties:
+        default_branch:
+          type: string
+          description: Default Git branch for new deployments
+          example: "main"
+          minLength: 1
+          maxLength: 255
+
     Error:
       type: object
       properties:
@@ -1281,6 +1373,8 @@ tags:
     description: Authentication and user management
   - name: Users
     description: User management
+  - name: Settings
+    description: User settings and preferences
   - name: Repositories
     description: Repository management and search
   - name: Projects
