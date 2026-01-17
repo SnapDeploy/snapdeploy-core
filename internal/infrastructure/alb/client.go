@@ -140,8 +140,26 @@ func (c *ALBClient) createTargetGroup(ctx context.Context, serviceName string, p
 		return "", fmt.Errorf("no target group created")
 	}
 
+	targetGroupArn := *result.TargetGroups[0].TargetGroupArn
+
+	// Set a short deregistration delay to speed up service deletion/recreation
+	// Default is 300 seconds which causes long waits during redeployments
+	_, err = c.client.ModifyTargetGroupAttributes(ctx, &elasticloadbalancingv2.ModifyTargetGroupAttributesInput{
+		TargetGroupArn: aws.String(targetGroupArn),
+		Attributes: []types.TargetGroupAttribute{
+			{
+				Key:   aws.String("deregistration_delay.timeout_seconds"),
+				Value: aws.String("30"),
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("[ALB] Warning: failed to set deregistration delay: %v", err)
+		// Don't fail - this is just an optimization
+	}
+
 	log.Printf("[ALB] Created new target group %s with port %d", serviceName, port)
-	return *result.TargetGroups[0].TargetGroupArn, nil
+	return targetGroupArn, nil
 }
 
 // createListenerRule creates or updates an ALB listener rule for host-based routing

@@ -81,14 +81,12 @@ func (c *ECSClient) DeployService(ctx context.Context, req DeploymentRequest) er
 	if needsRecreation {
 		log.Printf("[ECS] Service %s has invalid or mismatched load balancer config, recreating...", req.ServiceName)
 
-		// Delete the existing service
-		if err := c.DeleteService(ctx, req.ServiceName); err != nil {
-			log.Printf("[ECS] Warning: failed to delete old service: %v", err)
-			// Continue anyway - the service might be in a bad state
+		// Delete the existing service and wait for it to be fully deleted
+		// ECS service deletion can take 30+ seconds
+		if err := c.DeleteServiceAndWait(ctx, req.ServiceName, 2*time.Minute); err != nil {
+			log.Printf("[ECS] Warning: failed to fully delete old service: %v", err)
+			// Continue anyway - we'll try to create and see what happens
 		}
-
-		// Wait a bit for the service to be fully deleted
-		time.Sleep(10 * time.Second)
 
 		// Create the service fresh with the new target group
 		return c.createService(ctx, req, taskDefArn)
@@ -312,13 +310,11 @@ func (c *ECSClient) StopService(ctx context.Context, serviceName string) error {
 func (c *ECSClient) DeleteService(ctx context.Context, serviceName string) error {
 	// First, scale down to 0
 	if err := c.StopService(ctx, serviceName); err != nil {
-		return fmt.Errorf("failed to stop service: %w", err)
+		log.Printf("[ECS] Warning: failed to stop service before deletion: %v", err)
+		// Continue anyway - we'll force delete
 	}
 
-	// Wait a bit for tasks to stop
-	time.Sleep(5 * time.Second)
-
-	// Delete the service
+	// Delete the service with force
 	input := &ecs.DeleteServiceInput{
 		Service: aws.String(serviceName),
 		Cluster: aws.String(c.clusterName),
@@ -331,6 +327,42 @@ func (c *ECSClient) DeleteService(ctx context.Context, serviceName string) error
 	}
 
 	return nil
+}
+
+// DeleteServiceAndWait deletes an ECS service and waits for it to be fully deleted
+func (c *ECSClient) DeleteServiceAndWait(ctx context.Context, serviceName string, timeout time.Duration) error {
+	// Delete the service
+	if err := c.DeleteService(ctx, serviceName); err != nil {
+		return err
+	}
+
+	// Wait for the service to be fully deleted (INACTIVE status or not found)
+	log.Printf("[ECS] Waiting for service %s to be fully deleted...", serviceName)
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		service, err := c.getService(ctx, serviceName)
+		if err != nil {
+			if isServiceNotFoundError(err) {
+				log.Printf("[ECS] Service %s has been fully deleted", serviceName)
+				return nil
+			}
+			// Some other error - log but continue waiting
+			log.Printf("[ECS] Error checking service status: %v", err)
+		}
+
+		if service != nil && service.Status != nil {
+			log.Printf("[ECS] Service %s status: %s", serviceName, *service.Status)
+			if *service.Status == "INACTIVE" {
+				log.Printf("[ECS] Service %s is now INACTIVE", serviceName)
+				return nil
+			}
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	return fmt.Errorf("timeout waiting for service %s to be deleted", serviceName)
 }
 
 // isServiceNotFoundError checks if the error indicates a service doesn't exist
