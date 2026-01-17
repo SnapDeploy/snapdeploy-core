@@ -80,7 +80,9 @@ func getUserName(dbName string) string {
 }
 
 // CreateDatabase creates a new database and user for a project
-// If the database/user already exists, it will be dropped and recreated (fresh state)
+// If the database/user already exists, it will attempt to drop them first for a fresh state.
+// If dropping fails (e.g., due to dependencies), it will reuse the existing resources
+// with updated credentials instead of failing.
 // Returns the credentials including the DATABASE_URL for the project
 func (m *PostgresManager) CreateDatabase(ctx context.Context, dbName string) (*DatabaseCredentials, error) {
 	log.Printf("[PostgresManager] Creating database and user: %s", dbName)
@@ -98,26 +100,57 @@ func (m *PostgresManager) CreateDatabase(ctx context.Context, dbName string) (*D
 		// Continue anyway - database might not exist
 	}
 
-	// Drop the user if exists (must happen after dropping database that depends on it)
-	dropUserQuery := fmt.Sprintf("DROP USER IF EXISTS %s", username)
-	if _, err := m.masterDB.ExecContext(ctx, dropUserQuery); err != nil {
-		log.Printf("[PostgresManager] Warning: failed to drop existing user %s: %v", username, err)
+	// Check if user already exists
+	userExists, err := m.userExists(ctx, username)
+	if err != nil {
+		log.Printf("[PostgresManager] Warning: failed to check if user %s exists: %v", username, err)
+		userExists = false // Assume not exists, let CREATE USER handle it
 	}
 
-	// Create the user with the generated password
-	// Using format string for username but parameterized password to prevent injection
-	createUserQuery := fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", username, strings.ReplaceAll(password, "'", "''"))
-	if _, err := m.masterDB.ExecContext(ctx, createUserQuery); err != nil {
-		return nil, fmt.Errorf("failed to create user %s: %w", username, err)
+	if userExists {
+		// User exists - alter their password instead of trying to drop/recreate
+		// This handles cases where the user has dependencies that prevent dropping
+		log.Printf("[PostgresManager] User %s already exists, updating password", username)
+		alterUserQuery := fmt.Sprintf("ALTER USER %s WITH PASSWORD '%s'", username, strings.ReplaceAll(password, "'", "''"))
+		if _, err := m.masterDB.ExecContext(ctx, alterUserQuery); err != nil {
+			return nil, fmt.Errorf("failed to alter user %s: %w", username, err)
+		}
+		log.Printf("[PostgresManager] Updated password for user: %s", username)
+	} else {
+		// Create the user with the generated password
+		// Using format string for username but parameterized password to prevent injection
+		createUserQuery := fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", username, strings.ReplaceAll(password, "'", "''"))
+		if _, err := m.masterDB.ExecContext(ctx, createUserQuery); err != nil {
+			return nil, fmt.Errorf("failed to create user %s: %w", username, err)
+		}
+		log.Printf("[PostgresManager] Created user: %s", username)
 	}
-	log.Printf("[PostgresManager] Created user: %s", username)
 
-	// Create the database owned by the new user
-	createDBQuery := fmt.Sprintf("CREATE DATABASE %s OWNER %s", dbName, username)
-	if _, err := m.masterDB.ExecContext(ctx, createDBQuery); err != nil {
-		// Cleanup: drop the user we just created
-		m.masterDB.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", username))
-		return nil, fmt.Errorf("failed to create database %s: %w", dbName, err)
+	// Check if database already exists (in case DropDatabase failed to fully clean up)
+	dbExists, err := m.DatabaseExists(ctx, dbName)
+	if err != nil {
+		log.Printf("[PostgresManager] Warning: failed to check if database %s exists: %v", dbName, err)
+		dbExists = false // Assume not exists, let CREATE DATABASE handle it
+	}
+
+	if dbExists {
+		// Database exists - update ownership to ensure the user owns it
+		log.Printf("[PostgresManager] Database %s already exists, updating ownership", dbName)
+		alterDBQuery := fmt.Sprintf("ALTER DATABASE %s OWNER TO %s", dbName, username)
+		if _, err := m.masterDB.ExecContext(ctx, alterDBQuery); err != nil {
+			log.Printf("[PostgresManager] Warning: failed to alter database ownership: %v", err)
+			// Continue anyway - the database exists and user might already own it
+		}
+	} else {
+		// Create the database owned by the new user
+		createDBQuery := fmt.Sprintf("CREATE DATABASE %s OWNER %s", dbName, username)
+		if _, err := m.masterDB.ExecContext(ctx, createDBQuery); err != nil {
+			// Cleanup: drop the user we just created (only if we created it)
+			if !userExists {
+				m.masterDB.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", username))
+			}
+			return nil, fmt.Errorf("failed to create database %s: %w", dbName, err)
+		}
 	}
 
 	// Grant all privileges on the database to the user
@@ -193,6 +226,20 @@ func (m *PostgresManager) DatabaseExists(ctx context.Context, dbName string) (bo
 	}
 	if err != nil {
 		return false, fmt.Errorf("failed to check database existence: %w", err)
+	}
+	return true, nil
+}
+
+// userExists checks if a PostgreSQL role/user exists
+func (m *PostgresManager) userExists(ctx context.Context, username string) (bool, error) {
+	query := "SELECT 1 FROM pg_roles WHERE rolname = $1"
+	var exists int
+	err := m.masterDB.QueryRowContext(ctx, query, username).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check user existence: %w", err)
 	}
 	return true, nil
 }

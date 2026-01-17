@@ -66,17 +66,13 @@ WHERE status = 'DEPLOYED'
   AND expires_at IS NOT NULL
   AND expires_at < NOW()
 ORDER BY expires_at ASC
-LIMIT $1;
-
--- name: UpdateDeploymentExpiry :exec
+LIMIT $1;-- name: UpdateDeploymentExpiry :exec
 UPDATE deployments
 SET
     expires_at = $2,
     extended_count = $3,
     updated_at = NOW()
-WHERE id = $1;
-
--- name: GetActiveDeploymentByProjectID :one
+WHERE id = $1;-- name: GetActiveDeploymentByProjectID :one
 SELECT * FROM deployments
 WHERE project_id = $1
   AND status = 'DEPLOYED'
