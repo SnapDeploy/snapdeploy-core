@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"snapdeploy-core/internal/domain/deployment"
 	"snapdeploy-core/internal/domain/project"
@@ -61,19 +62,23 @@ func (s *CleanupService) CleanupDeployment(ctx context.Context, dep *deployment.
 
 	var cleanupErrors []error
 
-	// 1. Delete ECS Service (this stops running tasks)
+	// 1. Delete ECS Service and WAIT for it to be fully deleted
+	// IMPORTANT: We must wait for the service to be INACTIVE before deleting the target group,
+	// otherwise the service will be left with a reference to a deleted target group
 	if s.ecsClient != nil {
 		log.Printf("[Cleanup] Deleting ECS service: %s", serviceName)
-		if err := s.ecsClient.DeleteService(ctx, serviceName); err != nil {
+		if err := s.ecsClient.DeleteServiceAndWait(ctx, serviceName, 3*time.Minute); err != nil {
 			log.Printf("[Cleanup] Warning: failed to delete ECS service: %v", err)
 			cleanupErrors = append(cleanupErrors, fmt.Errorf("ECS: %w", err))
+			// Don't delete target group if ECS service deletion failed - it would leave orphaned references
 		} else {
 			log.Printf("[Cleanup] Successfully deleted ECS service: %s", serviceName)
 		}
 	}
 
 	// 2. Delete ALB Target Group and Listener Rule
-	if s.albClient != nil {
+	// Only delete if ECS service was successfully deleted (or didn't exist)
+	if s.albClient != nil && len(cleanupErrors) == 0 {
 		log.Printf("[Cleanup] Deleting ALB resources for: %s", serviceName)
 		if err := s.albClient.DeleteTargetGroupAndRule(ctx, serviceName); err != nil {
 			log.Printf("[Cleanup] Warning: failed to delete ALB resources: %v", err)
@@ -126,16 +131,19 @@ func (s *CleanupService) CleanupProjectResources(ctx context.Context, projectID 
 	log.Printf("[Cleanup] Starting full cleanup for project: %s", projectID)
 
 	serviceName := ecs.GenerateServiceName(projectID)
+	ecsDeletedSuccessfully := false
 
-	// Delete ECS Service
+	// Delete ECS Service and wait for it to be fully deleted
 	if s.ecsClient != nil {
-		if err := s.ecsClient.DeleteService(ctx, serviceName); err != nil {
+		if err := s.ecsClient.DeleteServiceAndWait(ctx, serviceName, 3*time.Minute); err != nil {
 			log.Printf("[Cleanup] Warning: failed to delete ECS service: %v", err)
+		} else {
+			ecsDeletedSuccessfully = true
 		}
 	}
 
-	// Delete ALB resources
-	if s.albClient != nil {
+	// Delete ALB resources only if ECS service was successfully deleted
+	if s.albClient != nil && ecsDeletedSuccessfully {
 		if err := s.albClient.DeleteTargetGroupAndRule(ctx, serviceName); err != nil {
 			log.Printf("[Cleanup] Warning: failed to delete ALB resources: %v", err)
 		}
