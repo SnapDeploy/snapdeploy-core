@@ -73,8 +73,61 @@ func (c *ECSClient) DeployService(ctx context.Context, req DeploymentRequest) er
 		return c.createService(ctx, req, taskDefArn)
 	}
 
-	// Service exists - update it
+	// Service exists - check if its load balancer configuration is still valid
+	// ECS doesn't allow changing load balancer config after creation, so if the
+	// target group doesn't match or was deleted, we need to recreate the service
+	needsRecreation := c.serviceNeedsRecreation(service, req.TargetGroupArn)
+
+	if needsRecreation {
+		log.Printf("[ECS] Service %s has invalid or mismatched load balancer config, recreating...", req.ServiceName)
+
+		// Delete the existing service
+		if err := c.DeleteService(ctx, req.ServiceName); err != nil {
+			log.Printf("[ECS] Warning: failed to delete old service: %v", err)
+			// Continue anyway - the service might be in a bad state
+		}
+
+		// Wait a bit for the service to be fully deleted
+		time.Sleep(10 * time.Second)
+
+		// Create the service fresh with the new target group
+		return c.createService(ctx, req, taskDefArn)
+	}
+
+	// Service exists and load balancer config is valid - just update it
 	return c.updateService(ctx, req.ServiceName, taskDefArn, req.DesiredCount)
+}
+
+// serviceNeedsRecreation checks if an ECS service needs to be recreated
+// This happens when the target group has changed or no longer exists
+func (c *ECSClient) serviceNeedsRecreation(service *types.Service, newTargetGroupArn string) bool {
+	if service == nil {
+		return false
+	}
+
+	// Check if the service has load balancers configured
+	if len(service.LoadBalancers) == 0 {
+		// No load balancers configured, but we need one - recreate
+		log.Printf("[ECS] Service has no load balancers configured, needs recreation")
+		return true
+	}
+
+	// Check if the target group ARN matches
+	for _, lb := range service.LoadBalancers {
+		if lb.TargetGroupArn != nil {
+			if *lb.TargetGroupArn == newTargetGroupArn {
+				// Target group matches - no need to recreate
+				return false
+			}
+			// Target group doesn't match - the old one may have been deleted
+			log.Printf("[ECS] Service target group ARN mismatch: current=%s, new=%s", *lb.TargetGroupArn, newTargetGroupArn)
+			return true
+		}
+	}
+
+	// No target group ARN found in load balancers - recreate
+	log.Printf("[ECS] Service has load balancers but no target group ARN found")
+	return true
 }
 
 // createTaskDefinition creates a new task definition revision
