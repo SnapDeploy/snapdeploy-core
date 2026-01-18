@@ -49,6 +49,7 @@ const (
 	StatusFailed     DeploymentStatus = "FAILED"
 	StatusRolledBack DeploymentStatus = "ROLLED_BACK"
 	StatusExpired    DeploymentStatus = "EXPIRED"
+	StatusDeleting   DeploymentStatus = "DELETING"
 )
 
 // DefaultTTLHours is the default time-to-live for deployments
@@ -62,10 +63,10 @@ func NewDeploymentStatus(status string) (DeploymentStatus, error) {
 	status = strings.ToUpper(strings.TrimSpace(status))
 
 	switch DeploymentStatus(status) {
-	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired:
+	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired, StatusDeleting:
 		return DeploymentStatus(status), nil
 	default:
-		return "", fmt.Errorf("invalid deployment status: %s (must be one of: PENDING, BUILDING, DEPLOYING, DEPLOYED, FAILED, ROLLED_BACK, EXPIRED)", status)
+		return "", fmt.Errorf("invalid deployment status: %s (must be one of: PENDING, BUILDING, DEPLOYING, DEPLOYED, FAILED, ROLLED_BACK, EXPIRED, DELETING)", status)
 	}
 }
 
@@ -75,7 +76,7 @@ func (s DeploymentStatus) String() string {
 
 func (s DeploymentStatus) IsValid() bool {
 	switch s {
-	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired:
+	case StatusPending, StatusBuilding, StatusDeploying, StatusDeployed, StatusFailed, StatusRolledBack, StatusExpired, StatusDeleting:
 		return true
 	default:
 		return false
@@ -83,7 +84,7 @@ func (s DeploymentStatus) IsValid() bool {
 }
 
 func (s DeploymentStatus) IsTerminal() bool {
-	return s == StatusDeployed || s == StatusFailed || s == StatusRolledBack || s == StatusExpired
+	return s == StatusDeployed || s == StatusFailed || s == StatusRolledBack || s == StatusExpired || s == StatusDeleting
 }
 
 // IsActive returns true if the deployment is currently running (can expire)

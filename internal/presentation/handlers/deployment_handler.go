@@ -579,13 +579,13 @@ func (h *DeploymentHandler) AppendDeploymentLog(c *gin.Context) {
 
 // DeleteDeployment handles DELETE /deployments/:id
 // @Summary Delete a deployment
-// @Description Deletes a deployment
+// @Description Deletes a deployment asynchronously. Returns immediately with status DELETING while cleanup happens in background.
 // @Tags Deployments
 // @Accept json
 // @Produce json
 // @Security ClerkAuth
 // @Param id path string true "Deployment ID"
-// @Success 204
+// @Success 202 {object} dto.DeploymentResponse "Deployment marked for deletion"
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -623,7 +623,7 @@ func (h *DeploymentHandler) DeleteDeployment(c *gin.Context) {
 		return
 	}
 
-	err = h.deploymentService.DeleteDeployment(c.Request.Context(), deploymentID, dbUser.ID)
+	response, err := h.deploymentService.DeleteDeployment(c.Request.Context(), deploymentID, dbUser.ID)
 	if err != nil {
 		if errors.Is(err, deployment.ErrDeploymentNotFound) {
 			c.JSON(http.StatusNotFound, ErrorResponse{
@@ -647,7 +647,8 @@ func (h *DeploymentHandler) DeleteDeployment(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	// Return 202 Accepted with the deployment in DELETING status
+	c.JSON(http.StatusAccepted, response)
 }
 
 // GetLatestProjectDeployment handles GET /projects/:id/deployments/latest

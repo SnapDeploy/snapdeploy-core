@@ -304,46 +304,73 @@ func (s *DeploymentService) AppendDeploymentLog(ctx context.Context, deploymentI
 	return s.toDTO(dep), nil
 }
 
-// DeleteDeployment deletes a deployment and cleans up its AWS resources if deployed
-func (s *DeploymentService) DeleteDeployment(ctx context.Context, deploymentID, userID string) error {
+// DeleteDeployment marks a deployment for deletion and starts async cleanup
+// Returns immediately after setting status to DELETING - cleanup happens in background
+func (s *DeploymentService) DeleteDeployment(ctx context.Context, deploymentID, userID string) (*dto.DeploymentResponse, error) {
 	// Parse IDs
 	did, err := deployment.ParseDeploymentID(deploymentID)
 	if err != nil {
-		return fmt.Errorf("invalid deployment ID: %w", err)
+		return nil, fmt.Errorf("invalid deployment ID: %w", err)
 	}
 
 	uid, err := user.ParseUserID(userID)
 	if err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
+		return nil, fmt.Errorf("invalid user ID: %w", err)
 	}
 
 	// Get deployment to check ownership
 	dep, err := s.deploymentRepo.FindByID(ctx, did)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check ownership
 	if !dep.BelongsToUser(uid) {
-		return deployment.ErrUnauthorized
+		return nil, deployment.ErrUnauthorized
 	}
 
-	// Clean up AWS resources if deployment was DEPLOYED
-	if dep.Status() == deployment.StatusDeployed && s.cleanupService != nil {
-		log.Printf("[Delete] Cleaning up AWS resources for deployment %s", deploymentID)
+	// Set status to DELETING
+	if err := dep.UpdateStatus(deployment.StatusDeleting); err != nil {
+		return nil, fmt.Errorf("failed to update status to deleting: %w", err)
+	}
+
+	// Save the updated status
+	if err := s.deploymentRepo.Save(ctx, dep); err != nil {
+		return nil, fmt.Errorf("failed to save deployment status: %w", err)
+	}
+
+	log.Printf("[Delete] Marked deployment %s for deletion, starting async cleanup", deploymentID)
+
+	// Start async cleanup in background goroutine
+	go s.deleteDeploymentAsync(dep)
+
+	return s.toDTO(dep), nil
+}
+
+// deleteDeploymentAsync performs the actual cleanup of AWS resources and deletes the deployment from the database
+func (s *DeploymentService) deleteDeploymentAsync(dep *deployment.Deployment) {
+	ctx := context.Background()
+	deploymentID := dep.ID().String()
+
+	log.Printf("[Delete] Starting async cleanup for deployment %s", deploymentID)
+
+	// Clean up AWS resources if cleanup service is available
+	if s.cleanupService != nil {
 		if err := s.cleanupService.CleanupDeployment(ctx, dep); err != nil {
-			log.Printf("[Delete] Warning: failed to cleanup deployment: %v", err)
+			log.Printf("[Delete] Warning: failed to cleanup deployment %s: %v", deploymentID, err)
 			// Continue with deletion even if cleanup fails - resources may have been partially cleaned
+		} else {
+			log.Printf("[Delete] Successfully cleaned up AWS resources for deployment %s", deploymentID)
 		}
 	}
 
 	// Delete deployment from database
-	if err := s.deploymentRepo.Delete(ctx, did); err != nil {
-		return fmt.Errorf("failed to delete deployment: %w", err)
+	if err := s.deploymentRepo.Delete(ctx, dep.ID()); err != nil {
+		log.Printf("[Delete] Error: failed to delete deployment %s from database: %v", deploymentID, err)
+		return
 	}
 
 	log.Printf("[Delete] Successfully deleted deployment %s", deploymentID)
-	return nil
 }
 
 // GetLatestDeploymentByProjectID retrieves the most recent deployment for a project

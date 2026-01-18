@@ -149,13 +149,14 @@ func isValidStatusTransition(from, to DeploymentStatus) bool {
 	}
 
 	transitions := map[DeploymentStatus][]DeploymentStatus{
-		StatusPending:    {StatusBuilding, StatusFailed},
-		StatusBuilding:   {StatusDeploying, StatusFailed},
-		StatusDeploying:  {StatusDeployed, StatusFailed},
-		StatusDeployed:   {StatusRolledBack, StatusExpired}, // Can expire or be rolled back
-		StatusFailed:     {StatusPending},                   // Allow retry
-		StatusRolledBack: {StatusPending},                   // Allow redeployment
-		StatusExpired:    {},                                // Terminal state - no transitions allowed
+		StatusPending:    {StatusBuilding, StatusFailed, StatusDeleting},
+		StatusBuilding:   {StatusDeploying, StatusFailed, StatusDeleting},
+		StatusDeploying:  {StatusDeployed, StatusFailed, StatusDeleting},
+		StatusDeployed:   {StatusRolledBack, StatusExpired, StatusDeleting}, // Can expire, be rolled back, or be deleted
+		StatusFailed:     {StatusPending, StatusDeleting},                   // Allow retry or deletion
+		StatusRolledBack: {StatusPending, StatusDeleting},                   // Allow redeployment or deletion
+		StatusExpired:    {StatusDeleting},                                  // Can only be deleted
+		StatusDeleting:   {},                                                // Terminal state - no transitions allowed
 	}
 
 	allowedTransitions, exists := transitions[from]
