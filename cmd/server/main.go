@@ -84,7 +84,7 @@ func main() {
 	userRepository := persistence.NewUserRepository(db)
 	repositoryRepository := persistence.NewRepositoryRepository(db)
 	projectRepository := persistence.NewProjectRepository(db)
-	deploymentRepository := persistence.NewDeploymentRepository(db)
+	deploymentRepository := persistence.NewDeploymentRepository(db, encryptionService)
 	envVarRepository := persistence.NewEnvVarRepository(db, encryptionService)
 
 	// Initialize application layer

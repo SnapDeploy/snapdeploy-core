@@ -4,22 +4,28 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"snapdeploy-core/internal/database"
 	"snapdeploy-core/internal/domain/deployment"
 	"snapdeploy-core/internal/domain/project"
 	"snapdeploy-core/internal/domain/user"
+	"snapdeploy-core/internal/infrastructure/encryption"
 )
 
 // DeploymentRepositoryImpl implements the domain deployment.DeploymentRepository interface
 type DeploymentRepositoryImpl struct {
-	db *database.DB
+	db                *database.DB
+	encryptionService *encryption.EncryptionService
 }
 
 // NewDeploymentRepository creates a new deployment repository implementation
-func NewDeploymentRepository(db *database.DB) deployment.DeploymentRepository {
-	return &DeploymentRepositoryImpl{db: db}
+func NewDeploymentRepository(db *database.DB, encryptionService *encryption.EncryptionService) deployment.DeploymentRepository {
+	return &DeploymentRepositoryImpl{
+		db:                db,
+		encryptionService: encryptionService,
+	}
 }
 
 // Save persists a deployment (create or update)
@@ -38,10 +44,14 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 		expiresAt = sql.NullTime{Time: *dep.ExpiresAt(), Valid: true}
 	}
 
-	// Convert database URL to nullable
+	// Convert and encrypt database URL
 	var databaseURL sql.NullString
 	if dep.DatabaseURL() != "" {
-		databaseURL = sql.NullString{String: dep.DatabaseURL(), Valid: true}
+		encryptedURL, err := r.encryptionService.Encrypt(dep.DatabaseURL())
+		if err != nil {
+			return fmt.Errorf("failed to encrypt database URL: %w", err)
+		}
+		databaseURL = sql.NullString{String: encryptedURL, Valid: true}
 	}
 
 	// If no error, deployment exists - update it
@@ -274,10 +284,18 @@ func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (
 		logs = dbDeployment.Logs.String
 	}
 
-	// Convert nullable database URL
+	// Convert and decrypt database URL
 	var databaseURL string
-	if dbDeployment.DatabaseURL.Valid {
-		databaseURL = dbDeployment.DatabaseURL.String
+	if dbDeployment.DatabaseURL.Valid && dbDeployment.DatabaseURL.String != "" {
+		decryptedURL, err := r.encryptionService.Decrypt(dbDeployment.DatabaseURL.String)
+		if err != nil {
+			// Log warning but don't fail - could be legacy unencrypted data
+			log.Printf("[DeploymentRepository] Warning: failed to decrypt database URL for deployment %s: %v", dbDeployment.ID.String(), err)
+			// Try to use it as-is (might be unencrypted legacy data)
+			databaseURL = dbDeployment.DatabaseURL.String
+		} else {
+			databaseURL = decryptedURL
+		}
 	}
 
 	// Convert nullable expiration time
