@@ -456,6 +456,7 @@ func (s *DeploymentService) toDTO(dep *deployment.Deployment) *dto.DeploymentRes
 		Branch:       dep.Branch().String(),
 		Status:       dep.Status().String(),
 		Logs:         dep.Logs().String(),
+		DatabaseURL:  dep.DatabaseURL(),
 		ExpiresAt:    expiresAt,
 		ExtendedCount: dep.ExtendedCount(),
 		CanExtend:    dep.CanExtend(),

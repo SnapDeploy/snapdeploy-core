@@ -19,6 +19,7 @@ type Deployment struct {
 	Branch        string         `json:"branch"`
 	Status        string         `json:"status"`
 	Logs          sql.NullString `json:"logs"`
+	DatabaseURL   sql.NullString `json:"database_url"`
 	CreatedAt     sql.NullTime   `json:"created_at"`
 	UpdatedAt     sql.NullTime   `json:"updated_at"`
 	ExpiresAt     sql.NullTime   `json:"expires_at"`

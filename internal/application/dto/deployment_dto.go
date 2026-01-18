@@ -27,6 +27,7 @@ type DeploymentResponse struct {
 	Branch        string  `json:"branch"`
 	Status        string  `json:"status"`
 	Logs          string  `json:"logs"`
+	DatabaseURL   string  `json:"database_url,omitempty"`   // Per-deployment database connection URL
 	ExpiresAt     *string `json:"expires_at,omitempty"`     // ISO 8601 timestamp when deployment expires
 	ExtendedCount int     `json:"extended_count"`           // Number of times TTL has been extended
 	CanExtend     bool    `json:"can_extend"`               // Whether the deployment can be extended

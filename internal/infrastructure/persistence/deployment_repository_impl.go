@@ -38,6 +38,12 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 		expiresAt = sql.NullTime{Time: *dep.ExpiresAt(), Valid: true}
 	}
 
+	// Convert database URL to nullable
+	var databaseURL sql.NullString
+	if dep.DatabaseURL() != "" {
+		databaseURL = sql.NullString{String: dep.DatabaseURL(), Valid: true}
+	}
+
 	// If no error, deployment exists - update it
 	if err == nil {
 		// Update existing deployment
@@ -45,6 +51,7 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 			ID:            dep.ID().UUID(),
 			Status:        dep.Status().String(),
 			Logs:          sql.NullString{String: dep.Logs().String(), Valid: true},
+			DatabaseURL:   databaseURL,
 			ExpiresAt:     expiresAt,
 			ExtendedCount: int32(dep.ExtendedCount()),
 			UpdatedAt:     sql.NullTime{Time: dep.UpdatedAt(), Valid: true},
@@ -62,6 +69,7 @@ func (r *DeploymentRepositoryImpl) Save(ctx context.Context, dep *deployment.Dep
 			Branch:        dep.Branch().String(),
 			Status:        dep.Status().String(),
 			Logs:          sql.NullString{String: dep.Logs().String(), Valid: true},
+			DatabaseURL:   databaseURL,
 			ExpiresAt:     expiresAt,
 			ExtendedCount: int32(dep.ExtendedCount()),
 			CreatedAt:     sql.NullTime{Time: dep.CreatedAt(), Valid: true},
@@ -266,6 +274,12 @@ func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (
 		logs = dbDeployment.Logs.String
 	}
 
+	// Convert nullable database URL
+	var databaseURL string
+	if dbDeployment.DatabaseURL.Valid {
+		databaseURL = dbDeployment.DatabaseURL.String
+	}
+
 	// Convert nullable expiration time
 	var expiresAt *time.Time
 	if dbDeployment.ExpiresAt.Valid {
@@ -280,6 +294,7 @@ func (r *DeploymentRepositoryImpl) toDomain(dbDeployment *database.Deployment) (
 		dbDeployment.Branch,
 		dbDeployment.Status,
 		logs,
+		databaseURL,
 		expiresAt,
 		int(dbDeployment.ExtendedCount),
 		createdAt,

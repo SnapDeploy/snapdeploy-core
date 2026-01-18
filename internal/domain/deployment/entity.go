@@ -17,6 +17,7 @@ type Deployment struct {
 	branch        Branch
 	status        DeploymentStatus
 	logs          DeploymentLog
+	databaseURL   string     // Per-deployment database connection URL (empty if no DB required)
 	expiresAt     *time.Time // When the deployment expires (nil = no expiration)
 	extendedCount int        // Number of times the TTL has been extended
 	createdAt     time.Time
@@ -62,6 +63,7 @@ func Reconstitute(
 	projectID project.ProjectID,
 	userID user.UserID,
 	commitHash, branch, status, logs string,
+	databaseURL string,
 	expiresAt *time.Time,
 	extendedCount int,
 	createdAt, updatedAt time.Time,
@@ -94,6 +96,7 @@ func Reconstitute(
 		branch:       br,
 		status:       stat,
 		logs:         NewDeploymentLog(logs),
+		databaseURL:  databaseURL,
 		expiresAt:    expiresAt,
 		extendedCount: extendedCount,
 		createdAt:    createdAt,
@@ -251,6 +254,16 @@ func (d *Deployment) Status() DeploymentStatus {
 
 func (d *Deployment) Logs() DeploymentLog {
 	return d.logs
+}
+
+func (d *Deployment) DatabaseURL() string {
+	return d.databaseURL
+}
+
+// SetDatabaseURL sets the database URL for this deployment
+func (d *Deployment) SetDatabaseURL(url string) {
+	d.databaseURL = url
+	d.updatedAt = time.Now()
 }
 
 func (d *Deployment) CreatedAt() time.Time {

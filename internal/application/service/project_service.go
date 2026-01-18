@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"time"
 
@@ -223,27 +222,9 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 	// Construct full deployment URL
 	deploymentURL := fmt.Sprintf("https://%s.%s", proj.CustomDomain().String(), baseDomain)
 
-	// Construct database URL if database is required
-	databaseURL := ""
-	if proj.RequireDB() {
-		// Database name is based on project ID (sanitized)
-		dbName := fmt.Sprintf("proj_%s", proj.ID().String()[:8])
-
-		// Parse RDS_DATABASE_URL to construct project-specific URL
-		rdsURL := os.Getenv("RDS_DATABASE_URL")
-		if rdsURL != "" {
-			// Parse the master database URL
-			if parsedURL, err := url.Parse(rdsURL); err == nil {
-				// Construct project database URL by replacing the database name
-				databaseURL = fmt.Sprintf("%s://%s@%s/%s?sslmode=require",
-					parsedURL.Scheme,
-					parsedURL.User.String(),
-					parsedURL.Host,
-					dbName,
-				)
-			}
-		}
-	}
+	// NOTE: Database URL is no longer provided at the project level.
+	// Per-deployment database credentials are stored on each deployment
+	// and should be fetched from the deployment response instead.
 
 	return &dto.ProjectResponse{
 		ID:             proj.ID().String(),
@@ -256,7 +237,7 @@ func (s *ProjectService) toDTO(proj *project.Project) *dto.ProjectResponse {
 		CustomDomain:   proj.CustomDomain().String(),
 		DeploymentURL:  deploymentURL,
 		RequireDB:      proj.RequireDB(),
-		DatabaseURL:    databaseURL,
+		DatabaseURL:    "", // Credentials are now per-deployment, fetch from deployment response
 		CreatedAt:      proj.CreatedAt().Format(time.RFC3339),
 		UpdatedAt:      proj.UpdatedAt().Format(time.RFC3339),
 	}

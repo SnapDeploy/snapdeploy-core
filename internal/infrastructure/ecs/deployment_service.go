@@ -184,6 +184,9 @@ func (o *DeploymentOrchestrator) DeployToECS(
 		// Add database URL to environment variables (contains unique credentials)
 		projectEnvVars["DATABASE_URL"] = dbCreds.DatabaseURL
 
+		// Store the database URL on the deployment entity for later retrieval
+		dep.SetDatabaseURL(dbCreds.DatabaseURL)
+
 		dep.AppendLog(fmt.Sprintf("✅ Database created: %s", dbCreds.DatabaseName))
 		dep.AppendLog(fmt.Sprintf("👤 Database user: %s (with unique password)", dbCreds.Username))
 		dep.AppendLog("📋 DATABASE_URL will be available to your application")

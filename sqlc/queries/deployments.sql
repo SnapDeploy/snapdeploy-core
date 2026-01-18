@@ -7,12 +7,13 @@ INSERT INTO deployments (
     branch,
     status,
     logs,
+    database_url,
     expires_at,
     extended_count,
     created_at,
     updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
 RETURNING *;
 
@@ -45,9 +46,10 @@ UPDATE deployments
 SET
     status = $2,
     logs = $3,
-    expires_at = $4,
-    extended_count = $5,
-    updated_at = $6
+    database_url = $4,
+    expires_at = $5,
+    extended_count = $6,
+    updated_at = $7
 WHERE id = $1;
 
 -- name: DeleteDeployment :exec
